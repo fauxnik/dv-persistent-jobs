@@ -1,0 +1,9 @@
+{
+	"Id": "PersistentJobsMod",
+	"DisplayName": "Persistent Jobs Mod",
+	"Author": "fauxnik",
+	"Version": "1.0.0",
+	"AssemblyName": "PersistentJobsMod.dll",
+	"EntryMethod": "PersistentJobsMod.Main.Load",
+	"Repository": ""
+}
