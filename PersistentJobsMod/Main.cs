@@ -30,7 +30,6 @@ namespace PersistentJobsMod
             {
                 return !isTogglingOn;
             }
-            thisModEntry.Active = isTogglingOn;
             return true;
         }
 
