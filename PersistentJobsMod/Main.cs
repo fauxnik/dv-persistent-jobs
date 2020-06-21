@@ -119,7 +119,7 @@ namespace PersistentJobsMod
                         Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
                         {
                             TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
-                            return trainCar != null && (trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude <= stationRange.destroyGeneratedJobsSqrDistanceAnyJobTaken;
+                            return trainCar != null && (trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude <= initialDistanceRegular;
                         });
                         return carInRangeOfStation != null;
                     });
