@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -18,6 +19,7 @@ namespace PersistentJobsMod
 
         static void Load(UnityModManager.ModEntry modEntry)
         {
+            modEntry.Logger.Log("PersistenJobsMod.Load");
             var harmony = HarmonyInstance.Create(modEntry.Info.Id);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
             modEntry.OnToggle = OnToggle;
@@ -26,6 +28,28 @@ namespace PersistentJobsMod
 
         static bool OnToggle(UnityModManager.ModEntry modEntry, bool isTogglingOn)
         {
+            modEntry.Logger.Log("PersistenJobsMod.OnToggle: " + isTogglingOn.ToString());
+
+            float? carsCheckPeriod = Traverse.Create(SingletonBehaviour<UnusedTrainCarDeleter>.Instance)
+                .Field("DELETE_CARS_CHECK_PERIOD")
+                .GetValue<float>();
+            if (carsCheckPeriod == null)
+            {
+                carsCheckPeriod = 0.5f;
+            }
+            SingletonBehaviour<UnusedTrainCarDeleter>.Instance.StopAllCoroutines();
+            if (isTogglingOn && !isModBroken)
+            {
+                SingletonBehaviour<UnusedTrainCarDeleter>.Instance
+                    .StartCoroutine(TrainCarsCreateJobOrDeleteCheck(Mathf.Max(carsCheckPeriod.Value, 1.0f)));
+            }
+            else
+            {
+                SingletonBehaviour<UnusedTrainCarDeleter>.Instance.StartCoroutine(
+                    SingletonBehaviour<UnusedTrainCarDeleter>.Instance.TrainCarsDeleteCheck(carsCheckPeriod.Value)
+                );
+            }
+
             if (isModBroken)
             {
                 return !isTogglingOn;
@@ -325,6 +349,156 @@ namespace PersistentJobsMod
                     }
                 }
                 return true;
+            }
+        }
+
+        public static IEnumerator TrainCarsCreateJobOrDeleteCheck(float period)
+        {
+            List<TrainCar> trainCarsToDelete = null;
+            List<TrainCar> trainCarCandidatesForDelete = null;
+            Traverse unusedTrainCarDeleterTraverser = null;
+            List<TrainCar> unusedTrainCarsMarkedForDelete = null;
+            Dictionary<TrainCar, DV.CarVisitChecker> carVisitCheckersMap = null;
+            Traverse AreDeleteConditionsFulfilledMethod = null;
+            try
+            {
+                trainCarsToDelete = new List<TrainCar>();
+                trainCarCandidatesForDelete = new List<TrainCar>();
+                unusedTrainCarDeleterTraverser = Traverse.Create(SingletonBehaviour<UnusedTrainCarDeleter>.Instance);
+                unusedTrainCarsMarkedForDelete = unusedTrainCarDeleterTraverser
+                    .Field("unusedTrainCarsMarkedForDelete")
+                    .GetValue<List<TrainCar>>();
+                carVisitCheckersMap = unusedTrainCarDeleterTraverser
+                    .Field("carVisitCheckersMap")
+                    .GetValue<Dictionary<TrainCar, DV.CarVisitChecker>>();
+                AreDeleteConditionsFulfilledMethod = unusedTrainCarDeleterTraverser.Method("AreDeleteConditionsFulfilled");
+            }
+            catch (Exception e)
+            {
+                thisModEntry.Logger.Error(string.Format(
+                    "Exception thrown during TrainCarsCreateJobOrDeleteCheck setup:\n{0}",
+                    e.Message
+                ));
+                OnCriticalFailure();
+            }
+            for (; ; )
+            {
+                yield return WaitFor.SecondsRealtime(period);
+
+                try
+                {
+                    if (PlayerManager.PlayerTransform == null || FastTravelController.IsFastTravelling)
+                    {
+                        continue;
+                    }
+
+                    if (unusedTrainCarsMarkedForDelete.Count == 0)
+                    {
+                        if (carVisitCheckersMap.Count != 0)
+                        {
+                            carVisitCheckersMap.Clear();
+                        }
+                        continue;
+                    }
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck skip checks:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
+
+                try
+                {
+                    // TODO: add job creation logic
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck job creation:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
+
+                yield return WaitFor.SecondsRealtime(period);
+
+                try
+                {
+                    trainCarCandidatesForDelete.Clear();
+                    for (int i = unusedTrainCarsMarkedForDelete.Count - 1; i >= 0; i--)
+                    {
+                        TrainCar trainCar = unusedTrainCarsMarkedForDelete[i];
+                        if (trainCar == null)
+                        {
+                            unusedTrainCarsMarkedForDelete.RemoveAt(i);
+                        }
+                        else if (AreDeleteConditionsFulfilledMethod.GetValue<bool>(trainCar))
+                        {
+                            unusedTrainCarsMarkedForDelete.RemoveAt(i);
+                            trainCarCandidatesForDelete.Add(trainCar);
+                        }
+                    }
+                    if (trainCarCandidatesForDelete.Count == 0)
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck delete candidate collection:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
+
+                yield return WaitFor.SecondsRealtime(period);
+
+                try
+                {
+                    trainCarsToDelete.Clear();
+                    for (int j = trainCarCandidatesForDelete.Count - 1; j >= 0; j--)
+                    {
+                        TrainCar trainCar2 = trainCarCandidatesForDelete[j];
+                        if (trainCar2 == null)
+                        {
+                            trainCarCandidatesForDelete.RemoveAt(j);
+                        }
+                        else if (AreDeleteConditionsFulfilledMethod.GetValue<bool>(trainCar2))
+                        {
+                            trainCarCandidatesForDelete.RemoveAt(j);
+                            carVisitCheckersMap.Remove(trainCar2);
+                            trainCarsToDelete.Add(trainCar2);
+                        }
+                        else
+                        {
+                            Debug.LogWarning(string.Format(
+                                "Returning {0} to unusedTrainCarsMarkedForDelete list. PlayerTransform was outside" +
+                                " of DELETE_SQR_DISTANCE_FROM_TRAINCAR range of train car, but after short period it" +
+                                " was back in range!",
+                                trainCar2.name
+                            ));
+                            trainCarCandidatesForDelete.RemoveAt(j);
+                            unusedTrainCarsMarkedForDelete.Add(trainCar2);
+                        }
+                    }
+                    if (trainCarsToDelete.Count != 0)
+                    {
+                        SingletonBehaviour<CarSpawner>.Instance
+                            .DeleteTrainCars(new List<TrainCar>(trainCarsToDelete), false);
+                    }
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck car deletion:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
             }
         }
     }
