@@ -149,6 +149,11 @@ namespace PersistentJobsMod
                 try
                 {
                     // TODO: if possible, generate another TransportJobChain (instead of an EmptyHaulJob)
+                    // every car must support an outbound cargoType:
+                    // get cargoTypesPerCar
+                    // get outbound cargoTypesPerStation
+                    // for each cargoTypesPerCar, intersect with cargoTypesPerStation
+                    // every intersection must result in at least 1 cargoType to be valid
                 }
                 catch (Exception e)
                 {
@@ -212,14 +217,11 @@ namespace PersistentJobsMod
                                     track,
                                     subsetTrainCars,
                                     rng);
-                                if (jobChainController != null)
-                                {
-                                    acc.Add(jobChainController);
-                                }
-                                else
+                                if (jobChainController == null)
                                 {
                                     break;
                                 }
+                                acc.Add(jobChainController);
                             }
                             if (acc.Count == trainCarsPerJob.Count)
                             {
@@ -228,7 +230,7 @@ namespace PersistentJobsMod
                         }
                         if (jobChainControllers == null)
                         {
-                            thisModEntry.Logger.Warning("Couldn't generate one or more JobChainController for trainCars from EmptyHaulJob!");
+                            thisModEntry.Logger.Warning("Couldn't generate one or more JobChainControllers for trainCars from EmptyHaulJob!");
                             return;
                         }
                         foreach (JobChainControllerWithEmptyHaulGeneration jobChainController in jobChainControllers)
