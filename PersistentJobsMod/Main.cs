@@ -71,10 +71,10 @@ namespace PersistentJobsMod
         [HarmonyPatch(typeof(StationController), "ExpireAllAvailableJobsInStation")]
         class StationController_ExpireAllAvailableJobsInStation_Patch
         {
+            // prevents jobs from expiring due to the player's distance from the station
             static bool Prefix()
             {
-                // skip the original method entirely when this mod is active
-                // doing so prevents jobs from expiring due to the player's distance from the station center
+                // skips the original method entirely when this mod is active
                 return !thisModEntry.Active;
             }
         }
@@ -83,6 +83,7 @@ namespace PersistentJobsMod
         [HarmonyPatchAll]
         class StationJobGenerationRange_AllMethods_Patch
         {
+            // expands the distance at which the job generation trigger is rearmed
             static void Prefix(StationJobGenerationRange __instance, MethodBase __originalMethod)
             {
                 try
@@ -127,6 +128,7 @@ namespace PersistentJobsMod
         [HarmonyPatch(typeof(JobValidator), "ProcessJobOverview")]
         class JobValidator_ProcessJobOverview_Patch
         {
+            // expires a job if none of its cars are in range of the starting station on job start attempt
             static void Prefix(
                 List<StationController> ___allStations,
                 DV.Printers.PrinterController ___bookletPrinter,
@@ -185,6 +187,7 @@ namespace PersistentJobsMod
         [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateJobChain")]
         class StationProceduralJobGenerator_GenerateJobChain_Patch
         {
+            // copied from the patched method; may help keep mod stable across game updates
             static bool Prefix(
                 System.Random rng,
                 bool forceJobWithLicenseRequirementFulfilled,
@@ -349,6 +352,7 @@ namespace PersistentJobsMod
         [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateInChainJob")]
         class StationProceduralJobGenerator_GenerateInChainJob_Patch
         {
+            // generates shunting unload jobs
             static bool Prefix()
             {
                 if (thisModEntry.Active)
@@ -376,6 +380,7 @@ namespace PersistentJobsMod
         [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateOutChainJob")]
         class StationProceduralJobGenerator_GenerateOutChainJob_Patch
         {
+            // generates shunting load jobs & freight haul jobs
             static bool Prefix()
             {
                 if (thisModEntry.Active)
@@ -403,6 +408,7 @@ namespace PersistentJobsMod
         [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateEmptyHaul")]
         class StationProceduralJobGenerator_GenerateEmptyHaul_Patch
         {
+            // generates logistical haul jobs
             static bool Prefix()
             {
                 if (thisModEntry.Active)
@@ -427,6 +433,7 @@ namespace PersistentJobsMod
             }
         }
 
+        // override/replacement for UnusedTrainCarDeleter.TrainCarsDeleteCheck coroutine
         public static IEnumerator TrainCarsCreateJobOrDeleteCheck(float period)
         {
             List<TrainCar> trainCarsToDelete = null;
