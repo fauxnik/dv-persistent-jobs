@@ -141,16 +141,190 @@ namespace PersistentJobsMod
             }
         }
 
-        [HarmonyPatch(typeof(StationProceduralJobGenerator))]
-        [HarmonyPatch(new Type[] { typeof(StationController) })]
-        class StationProceduralJobGenerator_Constructor_Patch
+        [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateJobChain")]
+        class StationProceduralJobGenerator_GenerateJobChain_Patch
         {
-            static void Postfix(ref StationProceduralJobGenerator __instance, StationController stationController)
+            static bool Prefix(
+                System.Random rng,
+                bool forceJobWithLicenseRequirementFulfilled,
+                ref StationProceduralJobGenerator __instance,
+                ref JobChainController __result,
+                StationProceduralJobsRuleset ___generationRuleset,
+                ref System.Random ___currentRng,
+                YardTracksOrganizer ___yto,
+                Yard ___stYard)
             {
-                if (__instance.GetType() != typeof(StationProceduralJobGeneratorMod))
+                if (thisModEntry.Active)
                 {
-                    __instance = new StationProceduralJobGeneratorMod(stationController);
+                    try
+                    {
+                        if (!___generationRuleset.loadStartingJobSupported && !___generationRuleset.haulStartingJobSupported && !___generationRuleset.unloadStartingJobSupported && !___generationRuleset.emptyHaulStartingJobSupported)
+                        {
+                            return true;
+                        }
+                        ___currentRng = rng;
+                        List<JobType> spawnableJobTypes = new List<JobType>();
+                        if (___generationRuleset.loadStartingJobSupported)
+                        {
+                            spawnableJobTypes.Add(JobType.ShuntingLoad);
+                        }
+                        if (___generationRuleset.emptyHaulStartingJobSupported)
+                        {
+                            spawnableJobTypes.Add(JobType.EmptyHaul);
+                        }
+                        int countOutTracksAvailable = ___yto.FilterOutOccupiedTracks(___stYard.TransferOutTracks).Count;
+                        if (___generationRuleset.haulStartingJobSupported && countOutTracksAvailable > 0)
+                        {
+                            spawnableJobTypes.Add(JobType.Transport);
+                        }
+                        int countInTracksAvailable = ___yto.FilterOutReservedTracks(___yto.FilterOutOccupiedTracks(___stYard.TransferInTracks)).Count;
+                        if (___generationRuleset.unloadStartingJobSupported && countInTracksAvailable > 0)
+                        {
+                            spawnableJobTypes.Add(JobType.ShuntingUnload);
+                        }
+                        JobChainController jobChainController = null;
+                        if (forceJobWithLicenseRequirementFulfilled)
+                        {
+                            if (spawnableJobTypes.Contains(JobType.Transport) && LicenseManager.IsJobLicenseAcquired(JobLicenses.FreightHaul))
+                            {
+                                jobChainController = Traverse.Create(__instance).Method("GenerateOutChainJob").GetValue<JobChainController>(JobType.Transport, true);
+                                if (jobChainController != null)
+                                {
+                                    __result = jobChainController;
+                                    return false;
+                                }
+                            }
+                            if (spawnableJobTypes.Contains(JobType.EmptyHaul) && LicenseManager.IsJobLicenseAcquired(JobLicenses.LogisticalHaul))
+                            {
+                                jobChainController = Traverse.Create(__instance).Method("GenerateEmptyHaul").GetValue<JobChainController>(true);
+                                if (jobChainController != null)
+                                {
+                                    __result = jobChainController;
+                                    return false;
+                                }
+                            }
+                            if (spawnableJobTypes.Contains(JobType.ShuntingLoad) && LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
+                            {
+                                jobChainController = Traverse.Create(__instance).Method("GenerateOutChainJob").GetValue<JobChainController>(JobType.ShuntingLoad, true);
+                                if (jobChainController != null)
+                                {
+                                    __result = jobChainController;
+                                    return false;
+                                }
+                            }
+                            if (spawnableJobTypes.Contains(JobType.ShuntingUnload) && LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
+                            {
+                                jobChainController = Traverse.Create(__instance).Method("GenerateInChainJob").GetValue<JobChainController>(JobType.ShuntingUnload, true);
+                                if (jobChainController != null)
+                                {
+                                    __result = jobChainController;
+                                    return false;
+                                }
+                            }
+                            __result = null;
+                            return false;
+                        }
+                        if (spawnableJobTypes.Contains(JobType.Transport) && countOutTracksAvailable > Mathf.FloorToInt(0.399999976f * (float)___stYard.TransferOutTracks.Count))
+                        {
+                            JobType startingJobType = JobType.Transport;
+                            jobChainController = Traverse.Create(__instance).Method("GenerateOutChainJob").GetValue<JobChainController>(startingJobType, false);
+                        }
+                        else
+                        {
+                            if (spawnableJobTypes.Count == 0)
+                            {
+                                __result = null;
+                                return false;
+                            }
+                            JobType startingJobType = Traverse.Create(__instance).Method("GetRandomFromList").GetValue<JobType>(spawnableJobTypes);
+                            switch (startingJobType)
+                            {
+                                case JobType.ShuntingLoad:
+                                case JobType.Transport:
+                                    jobChainController = Traverse.Create(__instance).Method("GenerateOutChainJob").GetValue<JobChainController>(startingJobType, false);
+                                    break;
+                                case JobType.ShuntingUnload:
+                                    jobChainController = Traverse.Create(__instance).Method("GenerateInChainJob").GetValue<JobChainController>(startingJobType, false);
+                                    break;
+                                case JobType.EmptyHaul:
+                                    jobChainController = Traverse.Create(__instance).Method("GenerateEmptyHaul").GetValue<JobChainController>(false);
+                                    break;
+                            }
+                        }
+                        ___currentRng = null;
+                        __result = jobChainController;
+                        return false;
+                    }
+                    catch (Exception e)
+                    {
+                        thisModEntry.Logger.Error(string.Format("Exception thrown during StationProceduralJobGenerator.GenerateJobChain prefix patch:\n{0}", e.Message));
+                        OnCriticalFailure();
+                    }
                 }
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateInChainJob")]
+        class StationProceduralJobGenerator_GenerateInChainJob_Patch
+        {
+            static bool Prefix()
+            {
+                if (thisModEntry.Active)
+                {
+                    try
+                    {
+                        // TODO: implement this!
+                    }
+                    catch (Exception e)
+                    {
+                        thisModEntry.Logger.Error(string.Format("Exception thrown during {0}.{1} {2} patch:\n{3}", "StationProceduralJobGenerator", "GenerateInChainJob", "prefix", e.Message));
+                        OnCriticalFailure();
+                    }
+                }
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateOutChainJob")]
+        class StationProceduralJobGenerator_GenerateOutChainJob_Patch
+        {
+            static bool Prefix()
+            {
+                if (thisModEntry.Active)
+                {
+                    try
+                    {
+                        // TODO: implement this!
+                    }
+                    catch (Exception e)
+                    {
+                        thisModEntry.Logger.Error(string.Format("Exception thrown during {0}.{1} {2} patch:\n{3}", "StationProceduralJobGenerator", "GenerateOutChainJob", "prefix", e.Message));
+                        OnCriticalFailure();
+                    }
+                }
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateEmptyHaul")]
+        class StationProceduralJobGenerator_GenerateEmptyHaul_Patch
+        {
+            static bool Prefix()
+            {
+                if (thisModEntry.Active)
+                {
+                    try
+                    {
+                        // TODO: implement this!
+                    }
+                    catch (Exception e)
+                    {
+                        thisModEntry.Logger.Error(string.Format("Exception thrown during {0}.{1} {2} patch:\n{3}", "StationProceduralJobGenerator", "GenerateEmptyHaul", "prefix", e.Message));
+                        OnCriticalFailure();
+                    }
+                }
+                return true;
             }
         }
     }
