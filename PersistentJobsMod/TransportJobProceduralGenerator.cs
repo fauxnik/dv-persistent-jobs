@@ -26,16 +26,16 @@ namespace PersistentJobsMod
             }
             float trainLength = yto.GetTotalTrainCarsLength(trainCars)
                 + yto.GetSeparationLengthBetweenCars(trainCars.Count);
-            Track destTrack = yto.GetTrackThatHasEnoughFreeSpace(
+            Track destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
                 yto.FilterOutOccupiedTracks(destStation.logicStation.yard.TransferInTracks),
                 trainLength
             );
-            if (destTrack == null)
+            if (destinationTrack == null)
             {
-                destTrack
+                destinationTrack
                     = yto.GetTrackThatHasEnoughFreeSpace(destStation.logicStation.yard.TransferInTracks, trainLength);
             }
-            if (destTrack == null)
+            if (destinationTrack == null)
             {
                 Debug.LogWarning(string.Format(
                     "Could not create ChainJob[{0}]: {1} - {2}. Found no TransferInTrack with enough free space!",
@@ -64,7 +64,7 @@ namespace PersistentJobsMod
                 startingStation,
                 startingTrack,
                 destStation,
-                destTrack,
+                destinationTrack,
                 trainCars,
                 transportedCargoPerCar,
                 cargoAmountPerCar,
