@@ -9,10 +9,11 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>PersistentJobsMod</RootNamespace>
     <AssemblyName>PersistentJobsMod</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <DVInstallPath>C:\Program Files (x86)\Steam\steamapps\common\Derail Valley\</DVInstallPath>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -73,9 +74,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CarTypesPerCargoType.cs" />
+    <Compile Include="JobChainControllerWithShuntingUnloadGeneration.cs" />
+    <Compile Include="JobChainControllerWithTransportGeneration.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="TransportJobChainProceduralGenerator.cs" />
+    <Compile Include="ShuntingLoadJobProceduralGenerator.cs" />
+    <Compile Include="TransportJobProceduralGenerator.cs" />
+    <Compile Include="Utilities.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
