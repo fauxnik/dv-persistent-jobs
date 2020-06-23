@@ -64,9 +64,9 @@ namespace PersistentJobsMod
                 .ToList<TrainCarType>();
             float bonusTimeLimit;
             float initialWage;
-            Utilities.CalculateTransportBonusTimeLimitAndWage(
-                startingStation,
-                destStation,
+            Utilities.CalculateShuntingBonusTimeLimitAndWage(
+                JobType.ShuntingLoad,
+                carsPerStartingTrack.Count,
                 transportedCarTypes,
                 transportedCargoPerCar,
                 out bonusTimeLimit,
@@ -117,16 +117,15 @@ namespace PersistentJobsMod
                 destStation.stationInfo.YardID
             );
             jobChainController.trainCarsForJobChain = orderedTrainCars;
-            Dictionary<CargoType, List<Tuple<TrainCar, float>>> cargoTypeToTrainCarAndAmount
-                = new Dictionary<CargoType, List<Tuple<TrainCar, float>>>();
+            Dictionary<CargoType, List<(TrainCar, float)>> cargoTypeToTrainCarAndAmount
+                = new Dictionary<CargoType, List<(TrainCar, float)>>();
             for (int i = 0; i < orderedTrainCars.Count; i++)
             {
                 if (!cargoTypeToTrainCarAndAmount.ContainsKey(orderedCargoTypes[i]))
                 {
-                    cargoTypeToTrainCarAndAmount[orderedCargoTypes[i]] = new List<Tuple<TrainCar, float>>();
+                    cargoTypeToTrainCarAndAmount[orderedCargoTypes[i]] = new List<(TrainCar, float)>();
                 }
-                cargoTypeToTrainCarAndAmount[orderedCargoTypes[i]]
-                    .Add(new Tuple<TrainCar, float>(orderedTrainCars[i], orderedCargoAmounts[i]));
+                cargoTypeToTrainCarAndAmount[orderedCargoTypes[i]].Add((orderedTrainCars[i], orderedCargoAmounts[i]));
             }
             List<CarsPerCargoType> loadData = cargoTypeToTrainCarAndAmount.Select(
                 kvPair => new CarsPerCargoType(

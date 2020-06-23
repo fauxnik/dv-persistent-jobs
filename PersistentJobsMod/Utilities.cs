@@ -37,6 +37,7 @@ namespace PersistentJobsMod
 
 		// based off EmptyHaulJobProceduralGenerator.CalculateBonusTimeLimitAndWage
 		public static void CalculateTransportBonusTimeLimitAndWage(
+			JobType jobType,
 			StationController startingStation,
 			StationController destStation,
 			List<TrainCarType> transportedCarTypes,
@@ -48,14 +49,32 @@ namespace PersistentJobsMod
 				= JobPaymentCalculator.GetDistanceBetweenStations(startingStation, destStation);
 			bonusTimeLimit = JobPaymentCalculator.CalculateHaulBonusTimeLimit(distanceBetweenStations, false);
 			initialWage = JobPaymentCalculator.CalculateJobPayment(
-				JobType.EmptyHaul,
+				jobType,
 				distanceBetweenStations,
-				Utilities.ExtractTransportPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
+				Utilities.ExtractPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
 			);
 		}
 
+		public static void CalculateShuntingBonusTimeLimitAndWage(
+			JobType jobType,
+			int numberOfTracks,
+			List<TrainCarType> transportedCarTypes,
+			List<CargoType> transportedCargoTypes,
+			out float bonusTimeLimit,
+			out float initialWage)
+        {
+			// scalar value 500 taken from StationProceduralJobGenerator
+			float distance = (float)numberOfTracks * 500f;
+			bonusTimeLimit = JobPaymentCalculator.CalculateShuntingBonusTimeLimit(numberOfTracks);
+			initialWage = JobPaymentCalculator.CalculateJobPayment(
+				jobType,
+				distance,
+				Utilities.ExtractPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
+			);
+        }
+
 		// based off EmptyHaulJobProceduralGenerator.ExtractEmptyHaulPaymentCalculationData
-		private static PaymentCalculationData ExtractTransportPaymentCalculationData(
+		private static PaymentCalculationData ExtractPaymentCalculationData(
 			List<TrainCarType> orderedCarTypes,
 			List<CargoType> orderedCargoTypes)
 		{

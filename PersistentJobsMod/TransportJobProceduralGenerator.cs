@@ -50,6 +50,7 @@ namespace PersistentJobsMod
             float bonusTimeLimit;
             float initialWage;
             Utilities.CalculateTransportBonusTimeLimitAndWage(
+                JobType.Transport,
                 startingStation,
                 destStation,
                 transportedCarTypes,
