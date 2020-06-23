@@ -2,10 +2,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using Harmony12;
 using UnityEngine;
 using UnityModManagerNet;
-using Harmony12;
-using System.Reflection;
+using DV;
 using DV.Logic.Job;
 
 namespace PersistentJobsMod
@@ -104,7 +105,7 @@ namespace PersistentJobsMod
                         {
                             __instance.destroyGeneratedJobsSqrDistanceAnyJobTaken = 4000000f;
                         }
-                        __instance.destroyGeneratedJobsSqrDistanceRegular = 
+                        __instance.destroyGeneratedJobsSqrDistanceRegular =
                             __instance.destroyGeneratedJobsSqrDistanceAnyJobTaken;
                     }
                     else
@@ -162,7 +163,7 @@ namespace PersistentJobsMod
                         Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
                         {
                             TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
-                            float distance = 
+                            float distance =
                                 (trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
                             return trainCar != null && distance <= initialDistanceRegular;
                         });
@@ -203,9 +204,9 @@ namespace PersistentJobsMod
                     try
                     {
                         if (
-                            !___generationRuleset.loadStartingJobSupported && 
-                            !___generationRuleset.haulStartingJobSupported && 
-                            !___generationRuleset.unloadStartingJobSupported && 
+                            !___generationRuleset.loadStartingJobSupported &&
+                            !___generationRuleset.haulStartingJobSupported &&
+                            !___generationRuleset.unloadStartingJobSupported &&
                             !___generationRuleset.emptyHaulStartingJobSupported)
                         {
                             return true;
@@ -236,7 +237,7 @@ namespace PersistentJobsMod
                         if (forceJobWithLicenseRequirementFulfilled)
                         {
                             if (
-                                spawnableJobTypes.Contains(JobType.Transport) && 
+                                spawnableJobTypes.Contains(JobType.Transport) &&
                                 LicenseManager.IsJobLicenseAcquired(JobLicenses.FreightHaul))
                             {
                                 jobChainController = Traverse.Create(__instance)
@@ -249,7 +250,7 @@ namespace PersistentJobsMod
                                 }
                             }
                             if (
-                                spawnableJobTypes.Contains(JobType.EmptyHaul) && 
+                                spawnableJobTypes.Contains(JobType.EmptyHaul) &&
                                 LicenseManager.IsJobLicenseAcquired(JobLicenses.LogisticalHaul))
                             {
                                 jobChainController = Traverse.Create(__instance)
@@ -262,7 +263,7 @@ namespace PersistentJobsMod
                                 }
                             }
                             if (
-                                spawnableJobTypes.Contains(JobType.ShuntingLoad) && 
+                                spawnableJobTypes.Contains(JobType.ShuntingLoad) &&
                                 LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
                             {
                                 jobChainController = Traverse.Create(__instance)
@@ -275,7 +276,7 @@ namespace PersistentJobsMod
                                 }
                             }
                             if (
-                                spawnableJobTypes.Contains(JobType.ShuntingUnload) && 
+                                spawnableJobTypes.Contains(JobType.ShuntingUnload) &&
                                 LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
                             {
                                 jobChainController = Traverse.Create(__instance)
@@ -291,7 +292,7 @@ namespace PersistentJobsMod
                             return false;
                         }
                         if (
-                            spawnableJobTypes.Contains(JobType.Transport) && 
+                            spawnableJobTypes.Contains(JobType.Transport) &&
                             countOutTracksAvailable > Mathf.FloorToInt(0.399999976f * (float)___stYard.TransferOutTracks.Count))
                         {
                             JobType startingJobType = JobType.Transport;
@@ -433,7 +434,73 @@ namespace PersistentJobsMod
             }
         }
 
+        [HarmonyPatch(typeof(UnusedTrainCarDeleter), "InstantConditionalDeleteOfUnusedCars")]
+        class UnusedTrainCarDeleter_InstantConditionalDeleteOfUnusedCars_Patch
+        {
+            // tries to generate new shunting load jobs for the train cars marked for deletion
+            // failing that, the train cars are deleted
+            public bool Prefix(
+                UnusedTrainCarDeleter __instance,
+                List<TrainCar> ___unusedTrainCarsMarkedForDelete,
+                Dictionary<TrainCar, CarVisitChecker> ___carVisitCheckersMap)
+            {
+                if (thisModEntry.Active)
+                {
+                    try
+                    {
+                        if (___unusedTrainCarsMarkedForDelete.Count == 0)
+                        {
+                            return false;
+                        }
+
+                        List<TrainCar> trainCarsToDelete = new List<TrainCar>();
+                        for (int i = ___unusedTrainCarsMarkedForDelete.Count - 1; i >= 0; i--)
+                        {
+                            TrainCar trainCar = ___unusedTrainCarsMarkedForDelete[i];
+                            if (trainCar == null)
+                            {
+                                ___unusedTrainCarsMarkedForDelete.RemoveAt(i);
+                                continue;
+                            }
+                            bool areDeleteConditionsFulfilled = Traverse.Create(__instance)
+                                .Method("AreDeleteConditionsFulfilled")
+                                .GetValue<bool>(trainCar);
+                            if (areDeleteConditionsFulfilled)
+                            {
+                                ___unusedTrainCarsMarkedForDelete.RemoveAt(i);
+                                trainCarsToDelete.Add(trainCar);
+                                ___carVisitCheckersMap.Remove(trainCar);
+                            }
+                        }
+                        if (trainCarsToDelete.Count == 0)
+                        {
+                            return false;
+                        }
+
+                        // TODO: add job creation logic
+
+                        SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(trainCarsToDelete, true);
+                        return false;
+                    }
+                    catch (Exception e)
+                    {
+                        thisModEntry.Logger.Error(string.Format(
+                            "Exception thrown during {0}.{1} {2} patch:\n{3}",
+                            "UnusedTrainCarDeleter",
+                            "InstantConditionalDeleteOfUnusedCars",
+                            "prefix",
+                            e.Message
+                        ));
+                        OnCriticalFailure();
+                    }
+                }
+                return true;
+            }
+        }
+
         // override/replacement for UnusedTrainCarDeleter.TrainCarsDeleteCheck coroutine
+        // tries to generate new shunting load jobs for the train cars marked for deletion
+        // failing that, the train cars are deleted
         public static IEnumerator TrainCarsCreateJobOrDeleteCheck(float period)
         {
             List<TrainCar> trainCarsToDelete = null;
@@ -581,6 +648,48 @@ namespace PersistentJobsMod
                     ));
                     OnCriticalFailure();
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(YardTracksOrganizer), "GetTrackThatHasEnoughFreeSpace")]
+        class YardTracksOrganizer_GetTrackThatHasEnoughFreeSpace_Patch
+        {
+            // chooses the shortest track with enough space (instead of the first track found)
+            static bool Prefix(List<Track> tracks, float requiredLength, YardTracksOrganizer __instance, ref Track __result)
+            {
+                if (thisModEntry.Active)
+                {
+                    try
+                    {
+                        __result = null;
+                        SortedList<double, Track> tracksSortedByLength = new SortedList<double, Track>();
+                        foreach (Track track in tracks)
+                        {
+                            double freeSpaceOnTrack = __instance.GetFreeSpaceOnTrack(track);
+                            if (freeSpaceOnTrack > (double)requiredLength)
+                            {
+                                tracksSortedByLength.Add(freeSpaceOnTrack, track);
+                            }
+                        }
+                        if (tracksSortedByLength.Count > 0)
+                        {
+                            __result = tracksSortedByLength[0];
+                        }
+                        return false;
+                    }
+                    catch (Exception e)
+                    {
+                        thisModEntry.Logger.Error(string.Format(
+                            "Exception thrown during {0}.{1} {2} patch:\n{3}",
+                            "YardTracksOrganizer",
+                            "GetTrackThatHasEnoughFreeSpace",
+                            "prefix",
+                            e.Message
+                        ));
+                        OnCriticalFailure();
+                    }
+                }
+                return true;
             }
         }
     }
