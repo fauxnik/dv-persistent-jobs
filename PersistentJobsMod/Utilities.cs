@@ -87,19 +87,15 @@ namespace PersistentJobsMod
 		public static List<CargoType> GetCargoTypesForCarType(TrainCarType trainCarType)
         {
 			CargoContainerType containerType = CargoTypes.CarTypeToContainerType[trainCarType];
-			List<CargoType> cargoTypes = new List<CargoType>();
 			Dictionary<CargoType, List<CargoContainerType>> cargoTypeToSupportedContainerTypes
 				= Traverse.Create(typeof(CargoTypes))
 					.Field("cargoTypeToSupportedCarContainer")
 					.GetValue<Dictionary<CargoType, List<CargoContainerType>>>();
-			foreach (CargoType cargoType in Enum.GetValues(typeof(CargoType)).Cast<CargoType>().ToList<CargoType>())
-            {
-				if (cargoTypeToSupportedContainerTypes[cargoType].Contains(containerType))
-                {
-					cargoTypes.Add(cargoType);
-                }
-            }
-			return cargoTypes;
+			return (
+				from ct in Enum.GetValues(typeof(CargoType)).Cast<CargoType>().ToList<CargoType>()
+				where cargoTypeToSupportedContainerTypes[ct].Contains(containerType)
+				select ct
+			).ToList();
         }
 
 		// based on StationProceduralJobGenerator.GenerateBaseCargoTrainData
