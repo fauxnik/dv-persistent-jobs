@@ -17,17 +17,7 @@ namespace PersistentJobsMod
             List<CargoType> transportedCargoPerCar,
             System.Random rng)
         {
-            // TODO: implement this!
             YardTracksOrganizer yto = YardTracksOrganizer.Instance;
-            // filter cargoTypes per car
-            startingStation.proceduralJobsRuleset.
-
-            // filter stations by inbound cargo
-
-            // choose destStation
-
-            // choose cargoType per car
-
             HashSet<CargoContainerType> hashSet = new HashSet<CargoContainerType>();
             for (int i = 0; i < trainCars.Count; i++)
             {
@@ -35,22 +25,36 @@ namespace PersistentJobsMod
             }
             float trainLength = yto.GetTotalTrainCarsLength(trainCars)
                 + yto.GetSeparationLengthBetweenCars(trainCars.Count);
-            Track destTrack = yto.GetTrackThatHasEnoughFreeSpace(
+            List<WarehouseMachineController> supportedWMCs = startingStation.warehouseMachineControllers
+                    .Where(wm => wm.supportedCargoTypes.Intersect(transportedCargoPerCar).Count() > 0)
+                    .ToList();
+            if (supportedWMCs.Count == 0)
+            {
+                Debug.LogWarning(string.Format(
+                    "Could not create ChainJob[{0}]: {1} - {2}. Found no supported WarehouseMachine!",
+                    JobType.ShuntingLoad,
+                    startingStation.logicStation.ID,
+                    destStation.logicStation.ID
+                ));
+                return null;
+            }
+            WarehouseMachine loadMachine = Utilities.GetRandomFromList(supportedWMCs, rng).warehouseMachine;
+            Track destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
                 yto.FilterOutOccupiedTracks(startingStation.logicStation.yard.TransferOutTracks),
                 trainLength
             );
-            if (destTrack == null)
+            if (destinationTrack == null)
             {
-                destTrack = yto.GetTrackThatHasEnoughFreeSpace(
+                destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
                     startingStation.logicStation.yard.TransferOutTracks,
                     trainLength
                 );
             }
-            if (destTrack == null)
+            if (destinationTrack == null)
             {
                 Debug.LogWarning(string.Format(
-                    "Could not create ChainJob[{0}]: {1} - {2}. Found no TransferInTrack with enough free space!",
-                    JobType.Transport,
+                    "Could not create ChainJob[{0}]: {1} - {2}. Found no TransferOutTrack with enough free space!",
+                    JobType.ShuntingLoad,
                     startingStation.logicStation.ID,
                     destStation.logicStation.ID
                 ));
@@ -71,9 +75,22 @@ namespace PersistentJobsMod
             JobLicenses requiredLicenses = LicenseManager.GetRequiredLicensesForJobType(JobType.Transport)
                 | LicenseManager.GetRequiredLicensesForCarContainerTypes(hashSet)
                 | LicenseManager.GetRequiredLicenseForNumberOfTransportedCars(trainCars.Count);
+            return GenerateShuntingLoadChainController(
+                startingStation,
+                carsPerStartingTrack,
+                loadMachine,
+                destStation,
+                destinationTrack,
+                trainCars,
+                transportedCargoPerCar,
+                (from tc in trainCars select 1.0f).ToList(),
+                bonusTimeLimit,
+                initialWage,
+                requiredLicenses
+            );
         }
 
-        private static JobChainControllerWithTransportGeneration GenerateTransportChainController(
+        private static JobChainControllerWithTransportGeneration GenerateShuntingLoadChainController(
             StationController startingStation,
             List<CarsPerTrack> carsPerStartingTrack,
             WarehouseMachine loadMachine,
