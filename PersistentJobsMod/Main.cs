@@ -609,8 +609,88 @@ namespace PersistentJobsMod
                     // populate possible cargoGroups per group of trainCars
                     ShuntingLoadJobProceduralGenerator.PopulateCargoGroupsPerTrainCarSet(cgsPerTcsPerSc);
 
-                    // generate new jobs for the trainCars at each station
+                    // pick new jobs for the trainCars at each station
+                    System.Random rng = new System.Random(Environment.TickCount);
+                    int maxCarsWithLicenses = LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses();
+                    List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobsToGenerate
+                        = new List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>();
+                    foreach (StationController sc in cgsPerTcsPerSc.Keys)
+                    {
+                        bool hasFulfilledLicenseReqs = false;
+                        List<(List<TrainCar>, List<CargoGroup>)> cgsPerTcs = cgsPerTcsPerSc[sc];
 
+                        while (cgsPerTcs.Count > 0)
+                        {
+                            List<TrainCar> trainCarsToLoad = new List<TrainCar>();
+                            int countTracks = rng.Next(1, sc.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
+                            int triesLeft = cgsPerTcs.Count;
+                            bool isFulfillingLicenseReqs = false;
+
+                            for (; countTracks > 0 && triesLeft > 0; triesLeft--)
+                            {
+                                (List<TrainCar> trainCars, List<CargoGroup> availableCargoGroups)
+                                    = cgsPerTcs[cgsPerTcs.Count - 1];
+
+                                List<CargoGroup> licensedCargoGroups
+                                    = (from cg in availableCargoGroups
+                                       where LicenseManager.IsLicensedForJob(cg.CargoRequiredLicenses)
+                                       select cg).ToList();
+
+                                if (isFulfillingLicenseReqs)
+                                {
+                                    if (licensedCargoGroups.Count == 0 || trainCarsToLoad.Count + trainCars.Count <= maxCarsWithLicenses)
+                                    {
+                                        // trying to satisfy licenses, but these trainCars don't fit the bill
+                                        // shuffle them to the front and try again
+                                        cgsPerTcs.Insert(0, cgsPerTcs[cgsPerTcs.Count - 1]);
+                                        cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
+                                        continue;
+                                    }
+                                }
+
+                                if (
+                                    trainCarsToLoad.Count == 0 &&
+                                    !hasFulfilledLicenseReqs &&
+                                    licensedCargoGroups.Count > 0 &&
+                                    trainCars.Count <= maxCarsWithLicenses)
+                                {
+                                    availableCargoGroups = licensedCargoGroups;
+                                    isFulfillingLicenseReqs = true;
+                                }
+
+                                // TODO: finish this!
+                            }
+                        }
+                    }
+
+                    // try to generate jobs
+                    List<(JobChainController, List<TrainCar>)> generationResults = jobsToGenerate.Select((definition) =>
+                    {
+                        (_, _, _, List<TrainCar> trainCars, _) = definition;
+
+                        // oh how I miss having a spread operator :(
+                        // getting param set from tuple: https://stackoverflow.com/a/59188152
+                        object[] paramSet = definition.ToTuple()
+                          .GetType()
+                          .GetProperties()
+                          .Select(property => property.GetValue(definition.ToTuple()))
+                          .ToArray();
+                        paramSet.Add(rng);
+
+                        // invoking method with param set: https://stackoverflow.com/a/51639098
+                        var generatorControl = typeof(ShuntingLoadJobProceduralGenerator)
+                            .GetMethod("GenerateShuntingLoadJobWithExistingCars", BindingFlags.Public | BindingFlags.Static);
+                        return ((JobChainController)generatorControl.Invoke(null, paramSet), trainCars);
+                    }).ToList();
+
+                    // prevent deletion for trainCars that generated a new job
+                    foreach ((JobChainController jcc, List<TrainCar> trainCars) in generationResults)
+                    {
+                        if (jcc != null)
+                        {
+                            trainCars.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
+                        }
+                    }
                 }
                 catch (Exception e)
                 {
