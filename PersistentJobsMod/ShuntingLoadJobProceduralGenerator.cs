@@ -194,7 +194,7 @@ namespace PersistentJobsMod
                 }
                 if (stationsByDistance.Count == 0)
                 {
-                    // trainCars not near any station
+                    // trainCars not near any station; abandon them
                     continue;
                 }
                 // the first station is the closest
@@ -234,6 +234,128 @@ namespace PersistentJobsMod
                     }
                 }
             }
+        }
+
+        public static List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
+            ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(
+                Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc,
+                System.Random rng)
+        {
+            int maxCarsLicensed = LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses();
+            List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobsToGenerate
+                = new List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>();
+
+            foreach (StationController startingStation in cgsPerTcsPerSc.Keys)
+            {
+                bool hasFulfilledLicenseReqs = false;
+                List<(List<TrainCar>, List<CargoGroup>)> cgsPerTcs = cgsPerTcsPerSc[startingStation];
+
+                while (cgsPerTcs.Count > 0)
+                {
+                    List<TrainCar> trainCarsToLoad = new List<TrainCar>();
+                    IEnumerable<CargoGroup> cargoGroupsToUse = new HashSet<CargoGroup>();
+                    int countTracks = rng.Next(1, startingStation.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
+                    int triesLeft = cgsPerTcs.Count;
+                    bool isFulfillingLicenseReqs = false;
+
+                    for (; countTracks > 0 && triesLeft > 0; triesLeft--)
+                    {
+                        (List<TrainCar> trainCarsToAdd, List<CargoGroup> availableCargoGroups)
+                            = cgsPerTcs[cgsPerTcs.Count - 1];
+
+                        List<CargoGroup> licensedCargoGroups
+                            = (from cg in availableCargoGroups
+                               where LicenseManager.IsLicensedForJob(cg.CargoRequiredLicenses)
+                               select cg).ToList();
+
+                        // determine which cargoGroups to choose from
+                        if (trainCarsToLoad.Count == 0)
+                        {
+                            if (!hasFulfilledLicenseReqs &&
+                                licensedCargoGroups.Count > 0 &&
+                                trainCarsToAdd.Count <= maxCarsLicensed)
+                            {
+                                isFulfillingLicenseReqs = true;
+                            }
+                        }
+                        else if (isFulfillingLicenseReqs &&
+                                (licensedCargoGroups.Count == 0 ||
+                                cargoGroupsToUse.Intersect(licensedCargoGroups).Count() == 0 ||
+                                trainCarsToLoad.Count + trainCarsToAdd.Count <= maxCarsLicensed) ||
+                                cargoGroupsToUse.Intersect(availableCargoGroups).Count() == 0)
+                        {
+                            // either trying to satisfy licenses, but these trainCars aren't compatible
+                            //   or the cargoGroups for these trainCars aren't compatible
+                            // shuffle them to the front and try again
+                            cgsPerTcs.Insert(0, cgsPerTcs[cgsPerTcs.Count - 1]);
+                            cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
+                            continue;
+                        }
+                        availableCargoGroups
+                            = isFulfillingLicenseReqs ? licensedCargoGroups : availableCargoGroups;
+
+                        // if we've made it this far, we can add these trainCars to the job
+                        cargoGroupsToUse = cargoGroupsToUse.Intersect(availableCargoGroups);
+                        trainCarsToLoad.AddRange(trainCarsToAdd);
+                        cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
+                        countTracks--;
+                    }
+
+                    if (trainCarsToLoad.Count == 0)
+                    {
+                        // no more jobs can be made from the trainCar sets at this station; abandon the rest
+                        break;
+                    }
+
+                    // if we're fulfilling license requirements this time around,
+                    // we won't need to try again for this station
+                    hasFulfilledLicenseReqs = isFulfillingLicenseReqs;
+
+                    CargoGroup chosenCargoGroup
+                        = Utilities.GetRandomFromEnumerable<CargoGroup>(cargoGroupsToUse, rng);
+                    StationController destStation
+                        = Utilities.GetRandomFromEnumerable<StationController>(chosenCargoGroup.stations, rng);
+                    Dictionary<Track, List<Car>> carsPerTrackDict = new Dictionary<Track, List<Car>>();
+                    foreach (TrainCar trainCar in trainCarsToLoad)
+                    {
+                        Track track = trainCar.logicCar.CurrentTrack;
+                        if (!carsPerTrackDict.ContainsKey(track))
+                        {
+                            carsPerTrackDict[track] = new List<Car>();
+                        }
+                        carsPerTrackDict[track].Add(trainCar.logicCar);
+                    }
+
+                    // populate all the info; we'll generate the jobs later
+                    jobsToGenerate.Add((
+                        startingStation,
+                        carsPerTrackDict.Keys.Select(
+                            track => new CarsPerTrack(track, carsPerTrackDict[track])).ToList(),
+                        destStation,
+                        trainCarsToLoad,
+                        trainCarsToLoad.Select(
+                            tc => Utilities.GetRandomFromEnumerable<CargoType>(
+                                chosenCargoGroup.cargoTypes.Intersect(
+                                    Utilities.GetCargoTypesForCarType(tc.carType)),
+                                rng)).ToList()));
+                }
+            }
+
+            return jobsToGenerate;
+        }
+
+        public static IEnumerable<(List<TrainCar>, JobChainController)> doJobGeneration(
+            List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobInfos,
+            System.Random rng)
+        {
+            return jobInfos.Select((definition) =>
+                {
+                    // I miss having a spread operator :(
+                    (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
+                    (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
+
+                    return (tcs, (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
+                });
         }
     }
 }
