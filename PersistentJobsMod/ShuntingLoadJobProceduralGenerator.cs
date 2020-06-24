@@ -349,13 +349,13 @@ namespace PersistentJobsMod
             System.Random rng)
         {
             return jobInfos.Select((definition) =>
-                {
-                    // I miss having a spread operator :(
-                    (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
-                    (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
+            {
+                // I miss having a spread operator :(
+                (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
+                (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
 
-                    return (tcs, (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
-                });
+                return (tcs, (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
+            });
         }
     }
 }
