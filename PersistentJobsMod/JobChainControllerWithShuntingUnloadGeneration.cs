@@ -5,12 +5,12 @@ using DV.Logic.Job;
 
 namespace PersistentJobsMod
 {
-    class JobChainControllerWithShuntingUnloadGeneration : JobChainController
-    {
-        public JobChainControllerWithShuntingUnloadGeneration(GameObject jobChainGO) : base(jobChainGO) { }
+	class JobChainControllerWithShuntingUnloadGeneration : JobChainController
+	{
+		public JobChainControllerWithShuntingUnloadGeneration(GameObject jobChainGO) : base(jobChainGO) { }
 
-        protected override void OnLastJobInChainCompleted(Job lastJobInChain)
-        {
+		protected override void OnLastJobInChainCompleted(Job lastJobInChain)
+		{
 			StaticJobDefinition staticJobDefinition = this.jobChain[this.jobChain.Count - 1];
 			if (staticJobDefinition.job == lastJobInChain && lastJobInChain.jobType == JobType.Transport)
 			{
@@ -53,6 +53,6 @@ namespace PersistentJobsMod
 				Debug.LogError("Unexpected job chain format. Transport has to be last job in chain for JobChainControllerWithShuntingUnloadGeneration! ShuntingUnload jobs won't be generated.");
 			}
 			base.OnLastJobInChainCompleted(lastJobInChain);
-        }
-    }
+		}
+	}
 }

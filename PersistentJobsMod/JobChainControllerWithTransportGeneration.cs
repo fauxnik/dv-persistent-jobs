@@ -6,12 +6,12 @@ using DV.Logic.Job;
 
 namespace PersistentJobsMod
 {
-    class JobChainControllerWithTransportGeneration : JobChainController
-    {
-        public JobChainControllerWithTransportGeneration(GameObject jobChainGO) : base(jobChainGO) { }
+	class JobChainControllerWithTransportGeneration : JobChainController
+	{
+		public JobChainControllerWithTransportGeneration(GameObject jobChainGO) : base(jobChainGO) { }
 
-        protected override void OnLastJobInChainCompleted(Job lastJobInChain)
-        {
+		protected override void OnLastJobInChainCompleted(Job lastJobInChain)
+		{
 			StaticJobDefinition lastJobDef = this.jobChain[this.jobChain.Count - 1];
 			if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
 			{
@@ -64,6 +64,6 @@ namespace PersistentJobsMod
 				);
 			}
 			base.OnLastJobInChainCompleted(lastJobInChain);
-        }
-    }
+		}
+	}
 }

@@ -3,8 +3,8 @@ using DV.Logic.Job;
 
 namespace PersistentJobsMod
 {
-    class CarTypesPerCargoType
-    {
+	class CarTypesPerCargoType
+	{
 		public CarTypesPerCargoType(List<TrainCarType> carTypes, CargoType cargoType, float totalCargoAmount)
 		{
 			this.carTypes = carTypes;
