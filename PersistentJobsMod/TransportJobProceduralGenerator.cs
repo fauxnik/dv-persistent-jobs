@@ -9,6 +9,104 @@ namespace PersistentJobsMod
 {
 	class TransportJobProceduralGenerator
 	{
+		public static JobChainControllerWithShuntingUnloadGeneration GenerateTransportJobWithCarSpawning(
+			StationController startingStation,
+			bool forceLicenseReqs,
+			System.Random rng)
+		{
+			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
+			List<CargoGroup> availableCargoGroups = startingStation.proceduralJobsRuleset.outputCargoGroups;
+			int countTrainCars = rng.Next(
+				startingStation.proceduralJobsRuleset.minCarsPerJob,
+				startingStation.proceduralJobsRuleset.maxCarsPerJob);
+
+			if (forceLicenseReqs)
+			{
+				if (!LicenseManager.IsJobLicenseAcquired(JobLicenses.FreightHaul))
+				{
+					Debug.LogError("Trying to generate a Transport job with forceLicenseReqs=true should " +
+						"never happen if player doesn't have FreightHaul license!");
+					return null;
+				}
+				availableCargoGroups
+					= (from cg in availableCargoGroups
+					   where LicenseManager.IsLicensedForJob(cg.CargoRequiredLicenses)
+					   select cg).ToList();
+				countTrainCars = Math.Min(countTrainCars, LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses());
+			}
+
+			CargoGroup chosenCargoGroup = Utilities.GetRandomFromEnumerable(availableCargoGroups, rng);
+
+			// choose cargo & trainCar types
+			List<CargoType> availableCargoTypes = chosenCargoGroup.cargoTypes;
+			List<CargoType> orderedCargoTypes = new List<CargoType>();
+			List<TrainCarType> orderedTrainCarTypes = new List<TrainCarType>();
+			for (int i = 0; i < countTrainCars; i++)
+			{
+				CargoType chosenCargoType = Utilities.GetRandomFromEnumerable(availableCargoTypes, rng);
+				List<CargoContainerType> availableContainers
+					= CargoTypes.GetCarContainerTypesThatSupportCargoType(chosenCargoType);
+				CargoContainerType chosenContainerType = Utilities.GetRandomFromEnumerable(availableContainers, rng);
+				List<TrainCarType> availableTrainCarTypes
+					= CargoTypes.GetTrainCarTypesThatAreSpecificContainerType(chosenContainerType);
+				TrainCarType chosenTrainCarType = Utilities.GetRandomFromEnumerable(availableTrainCarTypes, rng);
+				orderedCargoTypes.Add(chosenCargoType);
+				orderedTrainCarTypes.Add(chosenTrainCarType);
+			}
+			float approxTrainLength = yto.GetTotalCarTypesLength(orderedTrainCarTypes)
+				+ yto.GetSeparationLengthBetweenCars(countTrainCars);
+
+			// choose starting track
+			Track startingTrack
+				= yto.GetTrackThatHasEnoughFreeSpace(startingStation.logicStation.yard.TransferOutTracks, approxTrainLength);
+			if (startingTrack == null)
+			{
+				Debug.LogWarning("Couldn't find startingTrack with enough free space for train!");
+				return null;
+			}
+
+			// choose random destination station that has at least 1 available track
+			List<StationController> availableDestinations = new List<StationController>(chosenCargoGroup.stations);
+			StationController destStation = null;
+			Track destinationTrack = null;
+			while (availableDestinations.Count > 0 && destinationTrack == null)
+			{
+				destStation = Utilities.GetRandomFromEnumerable(availableDestinations, rng);
+				availableDestinations.Remove(destStation);
+				destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
+					yto.FilterOutOccupiedTracks(destStation.logicStation.yard.TransferInTracks),
+					approxTrainLength);
+			}
+			if (destinationTrack == null)
+			{
+				Debug.LogWarning("Couldn't find a station with enough free space for train!");
+				return null;
+			}
+
+			// spawn trainCars
+			RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
+			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(orderedTrainCarTypes, railTrack, true, 0.0, false, true);
+
+			JobChainControllerWithShuntingUnloadGeneration jcc = GenerateTransportJobWithExistingCars(
+				startingStation,
+				startingTrack,
+				destStation,
+				orderedTrainCars,
+				orderedCargoTypes,
+				Enumerable.Repeat(1.0f, countTrainCars).ToList(),
+				rng,
+				true);
+
+			if (jcc == null)
+			{
+				Debug.LogWarning("Couldn't generate job chain. Deleting spawned trainCars!");
+				SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(orderedTrainCars, true);
+				return null;
+			}
+
+			return jcc;
+		}
+
 		public static JobChainControllerWithShuntingUnloadGeneration GenerateTransportJobWithExistingCars(
 			StationController startingStation,
 			Track startingTrack,
@@ -16,7 +114,8 @@ namespace PersistentJobsMod
 			List<TrainCar> trainCars,
 			List<CargoType> transportedCargoPerCar,
 			List<float> cargoAmountPerCar,
-			System.Random rng)
+			System.Random rng,
+			bool forceCorrectCargoStateOnCars = false)
 		{
 			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
 			HashSet<CargoContainerType> carContainerTypes = new HashSet<CargoContainerType>();
@@ -24,16 +123,16 @@ namespace PersistentJobsMod
 			{
 				carContainerTypes.Add(CargoTypes.CarTypeToContainerType[trainCars[i].carType]);
 			}
-			float trainLength = yto.GetTotalTrainCarsLength(trainCars)
+			float approxTrainLength = yto.GetTotalTrainCarsLength(trainCars)
 				+ yto.GetSeparationLengthBetweenCars(trainCars.Count);
 			Track destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
 				yto.FilterOutOccupiedTracks(destStation.logicStation.yard.TransferInTracks),
-				trainLength
-			);
+				approxTrainLength);
 			if (destinationTrack == null)
 			{
-				destinationTrack
-					= yto.GetTrackThatHasEnoughFreeSpace(destStation.logicStation.yard.TransferInTracks, trainLength);
+				destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
+					destStation.logicStation.yard.TransferInTracks,
+					approxTrainLength);
 			}
 			if (destinationTrack == null)
 			{
@@ -69,6 +168,7 @@ namespace PersistentJobsMod
 				trainCars,
 				transportedCargoPerCar,
 				cargoAmountPerCar,
+				forceCorrectCargoStateOnCars,
 				bonusTimeLimit,
 				initialWage,
 				requiredLicenses
@@ -83,6 +183,7 @@ namespace PersistentJobsMod
 			List<TrainCar> orderedTrainCars,
 			List<CargoType> orderedCargoTypes,
 			List<float> orderedCargoAmounts,
+			bool forceCorrectCargoStateOnCars,
 			float bonusTimeLimit,
 			float initialWage,
 			JobLicenses requiredLicenses)
@@ -116,6 +217,7 @@ namespace PersistentJobsMod
 			staticTransportJobDefinition.trainCarsToTransport = orderedLogicCars;
 			staticTransportJobDefinition.transportedCargoPerCar = orderedCargoTypes;
 			staticTransportJobDefinition.cargoAmountPerCar = orderedCargoAmounts;
+			staticTransportJobDefinition.forceCorrectCargoStateOnCars = forceCorrectCargoStateOnCars;
 			jobChainController.AddJobDefinitionToChain(staticTransportJobDefinition);
 			return jobChainController;
 		}
