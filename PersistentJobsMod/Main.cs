@@ -664,19 +664,19 @@ namespace PersistentJobsMod
                     }
 
                     // try to generate jobs
-                    IEnumerable<(JobChainController, List<TrainCar>)> generationResults
+                    IEnumerable<(List<TrainCar> , JobChainController)> trainCarListJobChainControllerPairs
                         = jobsToGenerate.Select((definition) =>
                     {
                         // oh how I miss having a spread operator :(
                         (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
                         (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
 
-                        return ((JobChainController)ShuntingLoadJobProceduralGenerator
-                            .GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng), tcs);
+                        return (tcs, (JobChainController)ShuntingLoadJobProceduralGenerator
+                            .GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
                     });
 
                     // prevent deletion for trainCars that generated a new job
-                    foreach ((JobChainController jcc, List<TrainCar> trainCars) in generationResults)
+                    foreach ((List<TrainCar> trainCars, JobChainController jcc) in trainCarListJobChainControllerPairs)
                     {
                         if (jcc != null)
                         {
