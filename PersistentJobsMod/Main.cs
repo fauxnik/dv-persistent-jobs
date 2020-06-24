@@ -592,42 +592,100 @@ namespace PersistentJobsMod
 
                 yield return WaitFor.SecondsRealtime(period);
 
+                // ------ BEGIN JOB GENERATION ------
+                // group trainCars by trainset
+                Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet = null;
                 try
                 {
-                    // TODO: add job creation logic
-                    List<StationController> allStationControllers
-                        = SingletonBehaviour<LogicController>.Instance.GetComponents<StationController>().ToList();
-
-                    // group trainCars by trainset
-                    Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet
+                    trainCarsPerTrainSet
                         = ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarCandidatesForDelete);
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck trainset grouping:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
 
-                    // group trainCars sets by nearest stationController
-                    Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
+                yield return WaitFor.SecondsRealtime(period);
+
+                // group trainCars sets by nearest stationController
+                Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc = null;
+                try
+                {
+                    cgsPerTcsPerSc
                         = ShuntingLoadJobProceduralGenerator.GroupTrainCarSetsByNearestStation(trainCarsPerTrainSet);
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck station grouping:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
 
-                    // populate possible cargoGroups per group of trainCars
+                yield return WaitFor.SecondsRealtime(period);
+
+                // populate possible cargoGroups per group of trainCars
+                try
+                {
                     ShuntingLoadJobProceduralGenerator.PopulateCargoGroupsPerTrainCarSet(cgsPerTcsPerSc);
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck cargoGroup population:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
 
-                    // pick new jobs for the trainCars at each station
-                    System.Random rng = new System.Random(Environment.TickCount);
-                    List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobsToGenerate
-                        = ShuntingLoadJobProceduralGenerator
-                            .ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(cgsPerTcsPerSc, rng);
+                yield return WaitFor.SecondsRealtime(period);
 
-                    // try to generate jobs
-                    IEnumerable<(List<TrainCar> , JobChainController)> trainCarListJobChainControllerPairs
-                        = jobsToGenerate.Select((definition) =>
-                    {
-                        // I miss having a spread operator :(
-                        (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
-                        (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
+                // pick new jobs for the trainCars at each station
+                System.Random rng = new System.Random(Environment.TickCount);
+                List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
+                    jobInfos = null;
+                try
+                {
+                    jobInfos = ShuntingLoadJobProceduralGenerator
+                        .ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(cgsPerTcsPerSc, rng);
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck job info selection:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
 
-                        return (tcs, (JobChainController)ShuntingLoadJobProceduralGenerator
-                            .GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
-                    });
+                yield return WaitFor.SecondsRealtime(period);
 
-                    // prevent deletion of trainCars for which a new job was generated
+                // try to generate jobs
+                IEnumerable<(List<TrainCar>, JobChainController)> trainCarListJobChainControllerPairs = null;
+                try
+                {
+                    trainCarListJobChainControllerPairs
+                        = ShuntingLoadJobProceduralGenerator.doJobGeneration(jobInfos, rng);
+                }
+                catch (Exception e)
+                {
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck job generation:\n{0}",
+                        e.Message
+                    ));
+                    OnCriticalFailure();
+                }
+
+                yield return WaitFor.SecondsRealtime(period);
+
+                // preserve trainCars for which a new job was generated
+                try
+                {
                     foreach ((List<TrainCar> trainCars, JobChainController jcc) in trainCarListJobChainControllerPairs)
                     {
                         if (jcc != null)
@@ -639,11 +697,12 @@ namespace PersistentJobsMod
                 catch (Exception e)
                 {
                     thisModEntry.Logger.Error(string.Format(
-                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck job creation:\n{0}",
+                        "Exception thrown during TrainCarsCreateJobOrDeleteCheck trainCar preservation:\n{0}",
                         e.Message
                     ));
                     OnCriticalFailure();
                 }
+                // ------ END JOB GENERATION ------
 
                 yield return WaitFor.SecondsRealtime(period);
 
