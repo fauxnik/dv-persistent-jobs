@@ -149,5 +149,91 @@ namespace PersistentJobsMod
             jobChainController.AddJobDefinitionToChain(staticShuntingLoadJobDefinition);
             return jobChainController;
         }
+
+        public static Dictionary<Trainset, List<TrainCar>> GroupTrainCarsByTrainset(List<TrainCar> trainCars)
+        {
+            Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet = new Dictionary<Trainset, List<TrainCar>>();
+            foreach (TrainCar tc in trainCars)
+            {
+                if (tc != null)
+                {
+                    if (trainCarsPerTrainSet[tc.trainset] == null)
+                    {
+                        trainCarsPerTrainSet[tc.trainset] = new List<TrainCar>();
+                    }
+                    trainCarsPerTrainSet[tc.trainset].Add(tc);
+                }
+            }
+            return trainCarsPerTrainSet;
+        }
+
+        // cargoGroup lists will be unpopulated; use PopulateCargoGroupsPerTrainCarSet to fill in this data
+        public static Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>>
+            GroupTrainCarSetsByNearestStation(Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet)
+        {
+            StationController[] stationControllers
+                = SingletonBehaviour<LogicController>.Instance.GetComponents<StationController>();
+            Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
+                        = new Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>>();
+            float abandonmentThreshold = 1.2f * Main.DVJobDestroyDistanceRegular;
+            foreach (Trainset ts in trainCarsPerTrainSet.Keys)
+            {
+                List<TrainCar> tcs = trainCarsPerTrainSet[ts];
+                SortedList<float, StationController> stationsByDistance
+                    = new SortedList<float, StationController>();
+                foreach (StationController sc in stationControllers)
+                {
+                    // since all trainCars in the trainset are coupled,
+                    // use the position of the first one to approximate the position of the trainset
+                    float distance = (tcs[0].transform.position - sc.transform.position).sqrMagnitude;
+                    // only create jobs for trainCars within a reasonable range of a station
+                    if (distance < abandonmentThreshold)
+                    {
+                        stationsByDistance.Add(distance, sc);
+                    }
+                }
+                if (stationsByDistance.Count == 0)
+                {
+                    // trainCars not near any station
+                    continue;
+                }
+                // the first station is the closest
+                if (cgsPerTcsPerSc[stationsByDistance[0]] == null)
+                {
+                    cgsPerTcsPerSc[stationsByDistance[0]] = new List<(List<TrainCar>, List<CargoGroup>)>();
+                }
+                cgsPerTcsPerSc[stationsByDistance[0]].Add((tcs, new List<CargoGroup>()));
+            }
+            return cgsPerTcsPerSc;
+        }
+
+        public static void PopulateCargoGroupsPerTrainCarSet(
+            Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc)
+        {
+            foreach (StationController sc in cgsPerTcsPerSc.Keys)
+            {
+                foreach ((List<TrainCar>, List<CargoGroup>) cgsPerTcs in cgsPerTcsPerSc[sc])
+                {
+                    if (cgsPerTcs.Item2.Count > 0)
+                    {
+                        Debug.LogWarning(
+                            "Unexpected CargoGroup data in PopulateCargoGroupsPerTrainCarSet! Proceding to overwrite."
+                        );
+                    }
+                    List<CargoGroup> availableCargoGroups = new List<CargoGroup>();
+                    foreach (CargoGroup cg in sc.proceduralJobsRuleset.outputCargoGroups)
+                    {
+                        // ensure all trainCars will have at least one cargoType to haul
+                        IEnumerable<IEnumerable<CargoType>> outboundCargoTypesPerTrainCar
+                            = (from tc in cgsPerTcs.Item1
+                               select Utilities.GetCargoTypesForCarType(tc.carType).Intersect(cg.cargoTypes));
+                        if (outboundCargoTypesPerTrainCar.All(cgs => cgs.Count() > 0))
+                        {
+                            cgsPerTcs.Item2.Add(cg);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

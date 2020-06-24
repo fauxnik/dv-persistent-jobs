@@ -17,6 +17,7 @@ namespace PersistentJobsMod
         private static bool isModBroken = false;
         private static float initialDistanceRegular = 0f;
         private static float initialDistanceAnyJobTaken = 0f;
+        public static float DVJobDestroyDistanceRegular { get { return initialDistanceRegular; } }
 
         static void Load(UnityModManager.ModEntry modEntry)
         {
@@ -598,57 +599,15 @@ namespace PersistentJobsMod
                         = SingletonBehaviour<LogicController>.Instance.GetComponents<StationController>().ToList();
 
                     // group trainCars by trainset
-                    Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet = new Dictionary<Trainset, List<TrainCar>>();
-                    foreach (TrainCar tc in trainCarCandidatesForDelete)
-                    {
-                        if (tc != null)
-                        {
-                            if (trainCarsPerTrainSet[tc.trainset] == null)
-                            {
-                                trainCarsPerTrainSet[tc.trainset] = new List<TrainCar>();
-                            }
-                            trainCarsPerTrainSet[tc.trainset].Add(tc);
-                        }
-                    }
+                    Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet
+                        = ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarCandidatesForDelete);
 
-                    // group groups of trainCars by nearest stationController
+                    // group trainCars sets by nearest stationController
                     Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
-                        = new Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>>();
-                    foreach (Trainset ts in trainCarsPerTrainSet.Keys)
-                    {
-                        List<TrainCar> tcs = trainCarsPerTrainSet[ts];
-                        SortedList<float, StationController> stationsByDistance
-                            = new SortedList<float, StationController>();
-                        foreach (StationController sc in allStationControllers)
-                        {
-                            // since all trainCars in the trainset are coupled,
-                            // use the position of the first one to approximate the position of the trainset
-                            stationsByDistance.Add((tcs[0].transform.position - sc.transform.position).sqrMagnitude, sc);
-                        }
-                        // the first station is the closest
-                        if (cgsPerTcsPerSc[stationsByDistance[0]] == null)
-                        {
-                            cgsPerTcsPerSc[stationsByDistance[0]] = new List<(List<TrainCar>, List<CargoGroup>)>();
-                        }
-                        cgsPerTcsPerSc[stationsByDistance[0]].Add((tcs, new List<CargoGroup>()));
-                    }
+                        = ShuntingLoadJobProceduralGenerator.GroupTrainCarSetsByNearestStation(trainCarsPerTrainSet);
 
-                    // compute possible cargoGroups per group of trainCars
-                    foreach (StationController sc in cgsPerTcsPerSc.Keys)
-                    {
-                        foreach ((List<TrainCar>, List<CargoGroup>) cgsPerTcs in cgsPerTcsPerSc[sc])
-                        {
-                            List<CargoGroup> availableCargoGroups = new List<CargoGroup>();
-                            foreach (CargoGroup cg in sc.proceduralJobsRuleset.outputCargoGroups)
-                            {
-                                // ensure all trainCars will have at least one cargoType to haul
-                                if (cgsPerTcs.Item1.All(tc => Utilities.GetCargoTypesForCarType(tc.carType).Intersect(cg.cargoTypes).Count() > 0))
-                                {
-                                    cgsPerTcs.Item2.Add(cg);
-                                }
-                            }
-                        }
-                    }
+                    // populate possible cargoGroups per group of trainCars
+                    ShuntingLoadJobProceduralGenerator.PopulateCargoGroupsPerTrainCarSet(cgsPerTcsPerSc);
 
                     // generate new jobs for the trainCars at each station
 
