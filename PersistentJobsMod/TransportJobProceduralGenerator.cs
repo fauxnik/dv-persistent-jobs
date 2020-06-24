@@ -19,10 +19,10 @@ namespace PersistentJobsMod
 			System.Random rng)
 		{
 			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
-			HashSet<CargoContainerType> hashSet = new HashSet<CargoContainerType>();
+			HashSet<CargoContainerType> carContainerTypes = new HashSet<CargoContainerType>();
 			for (int i = 0; i < trainCars.Count; i++)
 			{
-				hashSet.Add(CargoTypes.CarTypeToContainerType[trainCars[i].carType]);
+				carContainerTypes.Add(CargoTypes.CarTypeToContainerType[trainCars[i].carType]);
 			}
 			float trainLength = yto.GetTotalTrainCarsLength(trainCars)
 				+ yto.GetSeparationLengthBetweenCars(trainCars.Count);
@@ -59,7 +59,7 @@ namespace PersistentJobsMod
 				out initialWage
 			);
 			JobLicenses requiredLicenses = LicenseManager.GetRequiredLicensesForJobType(JobType.Transport)
-				| LicenseManager.GetRequiredLicensesForCarContainerTypes(hashSet)
+				| LicenseManager.GetRequiredLicensesForCarContainerTypes(carContainerTypes)
 				| LicenseManager.GetRequiredLicenseForNumberOfTransportedCars(trainCars.Count);
 			return TransportJobProceduralGenerator.GenerateTransportChainController(
 				startingStation,
