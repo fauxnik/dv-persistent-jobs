@@ -611,24 +611,25 @@ namespace PersistentJobsMod
 
                     // pick new jobs for the trainCars at each station
                     System.Random rng = new System.Random(Environment.TickCount);
-                    int maxCarsWithLicenses = LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses();
+                    int maxCarsLicensed = LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses();
                     List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobsToGenerate
                         = new List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>();
-                    foreach (StationController sc in cgsPerTcsPerSc.Keys)
+                    foreach (StationController startingStation in cgsPerTcsPerSc.Keys)
                     {
                         bool hasFulfilledLicenseReqs = false;
-                        List<(List<TrainCar>, List<CargoGroup>)> cgsPerTcs = cgsPerTcsPerSc[sc];
+                        List<(List<TrainCar>, List<CargoGroup>)> cgsPerTcs = cgsPerTcsPerSc[startingStation];
 
                         while (cgsPerTcs.Count > 0)
                         {
                             List<TrainCar> trainCarsToLoad = new List<TrainCar>();
-                            int countTracks = rng.Next(1, sc.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
+                            IEnumerable<CargoGroup> cargoGroupsToUse = new HashSet<CargoGroup>();
+                            int countTracks = rng.Next(1, startingStation.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
                             int triesLeft = cgsPerTcs.Count;
                             bool isFulfillingLicenseReqs = false;
 
                             for (; countTracks > 0 && triesLeft > 0; triesLeft--)
                             {
-                                (List<TrainCar> trainCars, List<CargoGroup> availableCargoGroups)
+                                (List<TrainCar> trainCarsToAdd, List<CargoGroup> availableCargoGroups)
                                     = cgsPerTcs[cgsPerTcs.Count - 1];
 
                                 List<CargoGroup> licensedCargoGroups
@@ -636,30 +637,76 @@ namespace PersistentJobsMod
                                        where LicenseManager.IsLicensedForJob(cg.CargoRequiredLicenses)
                                        select cg).ToList();
 
-                                if (isFulfillingLicenseReqs)
+                                // determine which cargoGroups to choose from
+                                if (trainCarsToLoad.Count == 0)
                                 {
-                                    if (licensedCargoGroups.Count == 0 || trainCarsToLoad.Count + trainCars.Count <= maxCarsWithLicenses)
+                                    if (!hasFulfilledLicenseReqs &&
+                                        licensedCargoGroups.Count > 0 &&
+                                        trainCarsToAdd.Count <= maxCarsLicensed)
                                     {
-                                        // trying to satisfy licenses, but these trainCars don't fit the bill
-                                        // shuffle them to the front and try again
-                                        cgsPerTcs.Insert(0, cgsPerTcs[cgsPerTcs.Count - 1]);
-                                        cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
-                                        continue;
+                                        isFulfillingLicenseReqs = true;
                                     }
                                 }
-
-                                if (
-                                    trainCarsToLoad.Count == 0 &&
-                                    !hasFulfilledLicenseReqs &&
-                                    licensedCargoGroups.Count > 0 &&
-                                    trainCars.Count <= maxCarsWithLicenses)
+                                else if (isFulfillingLicenseReqs &&
+                                        (licensedCargoGroups.Count == 0 ||
+                                        cargoGroupsToUse.Intersect(licensedCargoGroups).Count() == 0 ||
+                                        trainCarsToLoad.Count + trainCarsToAdd.Count <= maxCarsLicensed) ||
+                                        cargoGroupsToUse.Intersect(availableCargoGroups).Count() == 0)
                                 {
-                                    availableCargoGroups = licensedCargoGroups;
-                                    isFulfillingLicenseReqs = true;
+                                    // either trying to satisfy licenses, but these trainCars aren't compatible
+                                    //   or the cargoGroups for these trainCars aren't compatible
+                                    // shuffle them to the front and try again
+                                    cgsPerTcs.Insert(0, cgsPerTcs[cgsPerTcs.Count - 1]);
+                                    cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
+                                    continue;
                                 }
+                                availableCargoGroups
+                                    = isFulfillingLicenseReqs ? licensedCargoGroups : availableCargoGroups;
 
-                                // TODO: finish this!
+                                // if we've made it this far, we can add these trainCars to the job
+                                cargoGroupsToUse = cargoGroupsToUse.Intersect(availableCargoGroups);
+                                trainCarsToLoad.AddRange(trainCarsToAdd);
+                                cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
+                                countTracks--;
                             }
+
+                            if (trainCarsToLoad.Count == 0)
+                            {
+                                // no more jobs can be made from these trainCar sets; abandon the rest
+                                break;
+                            }
+
+                            // if we're fulfilling license requirements this time around,
+                            // we won't need to try again for this station
+                            hasFulfilledLicenseReqs = isFulfillingLicenseReqs;
+
+                            CargoGroup chosenCargoGroup
+                                = Utilities.GetRandomFromEnumerable<CargoGroup>(cargoGroupsToUse, rng);
+                            StationController destStation
+                                = Utilities.GetRandomFromEnumerable<StationController>(chosenCargoGroup.stations, rng);
+                            Dictionary<Track, List<Car>> carsPerTrackDict = new Dictionary<Track, List<Car>>();
+                            foreach (TrainCar trainCar in trainCarsToLoad)
+                            {
+                                Track track = trainCar.logicCar.CurrentTrack;
+                                if (!carsPerTrackDict.ContainsKey(track))
+                                {
+                                    carsPerTrackDict[track] = new List<Car>();
+                                }
+                                carsPerTrackDict[track].Add(trainCar.logicCar);
+                            }
+
+                            // populate all the info; we'll generate the jobs later
+                            jobsToGenerate.Add((
+                                startingStation,
+                                carsPerTrackDict.Keys.Select(
+                                    track => new CarsPerTrack(track, carsPerTrackDict[track])).ToList(),
+                                destStation,
+                                trainCarsToLoad,
+                                trainCarsToLoad.Select(
+                                    tc => Utilities.GetRandomFromEnumerable<CargoType>(
+                                        chosenCargoGroup.cargoTypes.Intersect(
+                                            Utilities.GetCargoTypesForCarType(tc.carType)),
+                                        rng)).ToList()));
                         }
                     }
 
@@ -667,7 +714,7 @@ namespace PersistentJobsMod
                     IEnumerable<(List<TrainCar> , JobChainController)> trainCarListJobChainControllerPairs
                         = jobsToGenerate.Select((definition) =>
                     {
-                        // oh how I miss having a spread operator :(
+                        // I miss having a spread operator :(
                         (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
                         (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
 
@@ -675,7 +722,7 @@ namespace PersistentJobsMod
                             .GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
                     });
 
-                    // prevent deletion for trainCars that generated a new job
+                    // prevent deletion of trainCars for which a new job was generated
                     foreach ((List<TrainCar> trainCars, JobChainController jcc) in trainCarListJobChainControllerPairs)
                     {
                         if (jcc != null)

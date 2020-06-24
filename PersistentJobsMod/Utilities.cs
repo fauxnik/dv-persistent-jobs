@@ -51,7 +51,7 @@ namespace PersistentJobsMod
 			initialWage = JobPaymentCalculator.CalculateJobPayment(
 				jobType,
 				distanceBetweenStations,
-				Utilities.ExtractPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
+				ExtractPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
 			);
 		}
 
@@ -69,7 +69,7 @@ namespace PersistentJobsMod
 			initialWage = JobPaymentCalculator.CalculateJobPayment(
 				jobType,
 				distance,
-				Utilities.ExtractPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
+				ExtractPaymentCalculationData(transportedCarTypes, transportedCargoTypes)
 			);
         }
 
@@ -105,17 +105,21 @@ namespace PersistentJobsMod
 
 		public static List<CargoType> GetCargoTypesForCarType(TrainCarType trainCarType)
         {
-			CargoContainerType containerType = CargoTypes.CarTypeToContainerType[trainCarType];
-			Dictionary<CargoType, List<CargoContainerType>> cargoTypeToSupportedContainerTypes
-				= Traverse.Create(typeof(CargoTypes))
-					.Field("cargoTypeToSupportedCarContainer")
-					.GetValue<Dictionary<CargoType, List<CargoContainerType>>>();
-			return (
-				from ct in Enum.GetValues(typeof(CargoType)).Cast<CargoType>().ToList<CargoType>()
-				where cargoTypeToSupportedContainerTypes[ct].Contains(containerType)
-				select ct
-			).ToList();
-        }
+			if (!trainCarTypeToCargoTypes.ContainsKey(trainCarType))
+			{
+				CargoContainerType containerType = CargoTypes.CarTypeToContainerType[trainCarType];
+				Dictionary<CargoType, List<CargoContainerType>> cargoTypeToSupportedContainerTypes
+					= Traverse.Create(typeof(CargoTypes))
+						.Field("cargoTypeToSupportedCarContainer")
+						.GetValue<Dictionary<CargoType, List<CargoContainerType>>>();
+				trainCarTypeToCargoTypes[trainCarType] = (
+					from ct in Enum.GetValues(typeof(CargoType)).Cast<CargoType>().ToList<CargoType>()
+					where cargoTypeToSupportedContainerTypes[ct].Contains(containerType)
+					select ct
+				).ToList();
+			}
+			return trainCarTypeToCargoTypes[trainCarType];
+		}
 
 		// based on StationProceduralJobGenerator.GenerateBaseCargoTrainData
 		public static (
@@ -131,9 +135,9 @@ namespace PersistentJobsMod
 			List<CarTypesPerCargoType> carTypesPerCargoTypes = new List<CarTypesPerCargoType>();
 			List<TrainCarType> allCarTypes = new List<TrainCarType>();
 			int countCarsInTrain = rng.Next(minCountCars, maxCountCars + 1);
-			CargoGroup pickedCargoGroup = Utilities.GetRandomFromList<CargoGroup>(availableCargoGroups, rng);
+			CargoGroup pickedCargoGroup = GetRandomFromEnumerable<CargoGroup>(availableCargoGroups, rng);
 			List<CargoType> pickedCargoTypes = pickedCargoGroup.cargoTypes;
-			pickedCargoTypes = Utilities.GetMultipleRandomsFromList<CargoType>(
+			pickedCargoTypes = GetMultipleRandomsFromList<CargoType>(
 				pickedCargoTypes,
 				Math.Min(countCarsInTrain, rng.Next(1, pickedCargoTypes.Count + 1)),
 				rng
@@ -148,14 +152,13 @@ namespace PersistentJobsMod
 					= CargoTypes.GetCarContainerTypesThatSupportCargoType(pickedCargoTypes[i]);
 				List<TrainCarType> trainCarTypesThatAreSpecificContainerType
 					= CargoTypes.GetTrainCarTypesThatAreSpecificContainerType(
-						Utilities.GetRandomFromList<CargoContainerType>(cargoContainerTypesThatSupportCargoType, rng)
+						GetRandomFromEnumerable<CargoContainerType>(cargoContainerTypesThatSupportCargoType, rng)
 					);
 				List<TrainCarType> trainCarTypes = new List<TrainCarType>();
 				for (int j = 0; j < countCars; j++)
 				{
 					trainCarTypes.Add(
-						Utilities.GetRandomFromList<TrainCarType>(trainCarTypesThatAreSpecificContainerType, rng)
-					);
+						GetRandomFromEnumerable<TrainCarType>(trainCarTypesThatAreSpecificContainerType, rng));
 				}
 				carTypesPerCargoTypes
 					.Add(new CarTypesPerCargoType(trainCarTypes, pickedCargoTypes[i], (float)trainCarTypes.Count));
@@ -183,18 +186,18 @@ namespace PersistentJobsMod
             {
 				return (null, null);
             }
-			CargoGroup pickedCargoGroup = Utilities.GetRandomFromList<CargoGroup>(filteredCargoGroups, rng);
+			CargoGroup pickedCargoGroup = GetRandomFromEnumerable<CargoGroup>(filteredCargoGroups, rng);
 			List<CargoType> pickedCargoTypes = pickedCargoGroup.cargoTypes;
 			List<CargoType> orderedCargoTypes = orderedCargoTypesPerTrainCar.Select(
-				cts => GetRandomFromList<CargoType>(cts.Intersect(pickedCargoTypes).ToList(), rng)
+				cts => GetRandomFromEnumerable<CargoType>(cts.Intersect(pickedCargoTypes).ToList(), rng)
 			).ToList();
 			return (orderedCargoTypes, pickedCargoGroup);
 		}
 
 		// taken from StationProcedurationJobGenerator.GetRandomFromList
-		public static T GetRandomFromList<T>(List<T> list, System.Random rng)
+		public static T GetRandomFromEnumerable<T>(IEnumerable<T> list, System.Random rng)
         {
-			return list[rng.Next(0, list.Count)];
+			return list.ElementAt(rng.Next(0, list.Count()));
         }
 
 		// taken from StationProcedurationJobGenerator.GetMultipleRandomsFromList
@@ -215,5 +218,7 @@ namespace PersistentJobsMod
 			}
 			return list3;
 		}
+
+		private static Dictionary<TrainCarType, List<CargoType>> trainCarTypeToCargoTypes = new Dictionary<TrainCarType, List<CargoType>>();
 	}
 }

@@ -38,7 +38,7 @@ namespace PersistentJobsMod
                 ));
                 return null;
             }
-            WarehouseMachine loadMachine = Utilities.GetRandomFromList(supportedWMCs, rng).warehouseMachine;
+            WarehouseMachine loadMachine = Utilities.GetRandomFromEnumerable(supportedWMCs, rng).warehouseMachine;
             Track destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
                 yto.FilterOutOccupiedTracks(startingStation.logicStation.yard.TransferOutTracks),
                 trainLength
