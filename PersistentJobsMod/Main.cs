@@ -478,7 +478,37 @@ namespace PersistentJobsMod
                             return false;
                         }
 
-                        // TODO: add job creation logic
+                        // ------ BEGIN JOB GENERATION ------
+                        // group trainCars by trainset
+                        Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet
+                                = ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarsToDelete);
+
+                        // group trainCars sets by nearest stationController
+                        Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
+                            = ShuntingLoadJobProceduralGenerator.GroupTrainCarSetsByNearestStation(trainCarsPerTrainSet);
+
+                        // populate possible cargoGroups per group of trainCars
+                        ShuntingLoadJobProceduralGenerator.PopulateCargoGroupsPerTrainCarSet(cgsPerTcsPerSc);
+
+                        // pick new jobs for the trainCars at each station
+                        System.Random rng = new System.Random(Environment.TickCount);
+                        List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
+                            jobInfos = ShuntingLoadJobProceduralGenerator
+                                .ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(cgsPerTcsPerSc, rng);
+
+                        // try to generate jobs
+                        IEnumerable<(List<TrainCar>, JobChainController)> trainCarListJobChainControllerPairs
+                            = ShuntingLoadJobProceduralGenerator.doJobGeneration(jobInfos, rng);
+
+                        // preserve trainCars for which a new job was generated
+                        foreach ((List<TrainCar> trainCars, JobChainController jcc) in trainCarListJobChainControllerPairs)
+                        {
+                            if (jcc != null)
+                            {
+                                trainCars.ForEach(tc => trainCarsToDelete.Remove(tc));
+                            }
+                        }
+                        // ------ END JOB GENERATION ------
 
                         SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(trainCarsToDelete, true);
                         return false;
