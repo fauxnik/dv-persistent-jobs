@@ -664,24 +664,16 @@ namespace PersistentJobsMod
                     }
 
                     // try to generate jobs
-                    List<(JobChainController, List<TrainCar>)> generationResults = jobsToGenerate.Select((definition) =>
+                    IEnumerable<(JobChainController, List<TrainCar>)> generationResults
+                        = jobsToGenerate.Select((definition) =>
                     {
-                        (_, _, _, List<TrainCar> trainCars, _) = definition;
-
                         // oh how I miss having a spread operator :(
-                        // getting param set from tuple: https://stackoverflow.com/a/59188152
-                        object[] paramSet = definition.ToTuple()
-                          .GetType()
-                          .GetProperties()
-                          .Select(property => property.GetValue(definition.ToTuple()))
-                          .ToArray();
-                        paramSet.Add(rng);
+                        (StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
+                        (_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
 
-                        // invoking method with param set: https://stackoverflow.com/a/51639098
-                        var generatorControl = typeof(ShuntingLoadJobProceduralGenerator)
-                            .GetMethod("GenerateShuntingLoadJobWithExistingCars", BindingFlags.Public | BindingFlags.Static);
-                        return ((JobChainController)generatorControl.Invoke(null, paramSet), trainCars);
-                    }).ToList();
+                        return ((JobChainController)ShuntingLoadJobProceduralGenerator
+                            .GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng), tcs);
+                    });
 
                     // prevent deletion for trainCars that generated a new job
                     foreach ((JobChainController jcc, List<TrainCar> trainCars) in generationResults)
