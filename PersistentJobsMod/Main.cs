@@ -481,6 +481,44 @@ namespace PersistentJobsMod
 			}
 		}
 
+		// divert cars that can be loaded at the current station for later generation of ShuntingLoad jobs
+		[HarmonyPatch(typeof(JobChainControllerWithEmptyHaulGeneration), "OnLastJobInChainCompleted")]
+		class JobChainControllerWithEmptyHaulGeneration_OnLastJobInChainCompleted_Patch
+		{
+			static void Prefix(
+				JobChainControllerWithEmptyHaulGeneration __instance,
+				List<StaticJobDefinition> ___jobChain,
+				Job lastJobInChain)
+			{
+				StaticJobDefinition lastJobDef = ___jobChain[___jobChain.Count - 1];
+				if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingUnload)
+				{
+					StaticShuntingUnloadJobDefinition unloadJobDef = lastJobDef as StaticShuntingUnloadJobDefinition;
+					if (unloadJobDef != null)
+					{
+						StationController station = SingletonBehaviour<LogicController>.Instance
+							.YardIdToStationController[lastJobInChain.chainData.chainDestinationYardId];
+						List<CargoGroup> availableCargoGroups = station.proceduralJobsRuleset.outputCargoGroups;
+
+						// if a trainCar set can be reused at the current station, keep them there
+						foreach (CarsPerTrack cpt in unloadJobDef.carsPerDestinationTrack)
+						{
+							// check if there is any cargoGroup that satisfies all the cars
+							if (availableCargoGroups.Any(
+								cg => cpt.cars.All(
+									c => Utilities.GetCargoTypesForCarType(c.carType).Intersect(cg.cargoTypes).Any())))
+							{
+								// removing the trainCars prevents generating an EmptyHaul job for them
+								// they will be candidates for new jobs after the player leaves the area
+								cpt.cars.ForEach(
+									c => __instance.trainCarsForJobChain.Remove(TrainCar.logicCarToTrainCar[c]));
+							}
+						}
+					}
+				}
+			}
+		}
+
 		// tries to generate new shunting load jobs for the train cars marked for deletion
 		// failing that, the train cars are deleted
 		[HarmonyPatch(typeof(UnusedTrainCarDeleter), "InstantConditionalDeleteOfUnusedCars")]
