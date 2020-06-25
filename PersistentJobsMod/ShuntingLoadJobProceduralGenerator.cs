@@ -290,6 +290,7 @@ namespace PersistentJobsMod
 			Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet = new Dictionary<Trainset, List<TrainCar>>();
 			foreach (TrainCar tc in trainCars)
 			{
+				// TODO: to skip player spawned cars or to not?
 				if (tc != null)
 				{
 					if (trainCarsPerTrainSet[tc.trainset] == null)
