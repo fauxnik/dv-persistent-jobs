@@ -17,6 +17,7 @@ namespace PersistentJobsMod
 		private static bool isModBroken = false;
 		private static float initialDistanceRegular = 0f;
 		private static float initialDistanceAnyJobTaken = 0f;
+		private static float PERIOD = 5 * 60.0f;
 		public static float DVJobDestroyDistanceRegular { get { return initialDistanceRegular; } }
 
 		static void Load(UnityModManager.ModEntry modEntry)
@@ -43,7 +44,7 @@ namespace PersistentJobsMod
 			if (isTogglingOn && !isModBroken)
 			{
 				SingletonBehaviour<UnusedTrainCarDeleter>.Instance
-					.StartCoroutine(TrainCarsCreateJobOrDeleteCheck(Mathf.Max(carsCheckPeriod.Value, 1.0f)));
+					.StartCoroutine(TrainCarsCreateJobOrDeleteCheck(PERIOD, Mathf.Max(carsCheckPeriod.Value, 1.0f)));
 			}
 			else
 			{
@@ -616,7 +617,7 @@ namespace PersistentJobsMod
 		// override/replacement for UnusedTrainCarDeleter.TrainCarsDeleteCheck coroutine
 		// tries to generate new shunting load jobs for the train cars marked for deletion
 		// failing that, the train cars are deleted
-		public static IEnumerator TrainCarsCreateJobOrDeleteCheck(float period)
+		public static IEnumerator TrainCarsCreateJobOrDeleteCheck(float period, float interopPeriod)
 		{
 			List<TrainCar> trainCarsToDelete = null;
 			List<TrainCar> trainCarCandidatesForDelete = null;
@@ -704,7 +705,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// ------ BEGIN JOB GENERATION ------
 				// group trainCars by trainset
@@ -723,7 +724,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// group trainCars sets by nearest stationController
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc = null;
@@ -741,7 +742,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// populate possible cargoGroups per group of trainCars
 				try
@@ -757,7 +758,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// pick new jobs for the trainCars at each station
 				System.Random rng = new System.Random(Environment.TickCount);
@@ -777,7 +778,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// try to generate jobs
 				IEnumerable<(List<TrainCar>, JobChainController)> trainCarListJobChainControllerPairs = null;
@@ -795,7 +796,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// preserve trainCars for which a new job was generated
 				try
@@ -818,7 +819,7 @@ namespace PersistentJobsMod
 				}
 				// ------ END JOB GENERATION ------
 
-				yield return WaitFor.SecondsRealtime(period);
+				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				try
 				{
