@@ -80,6 +80,7 @@
     <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ShuntingLoadJobProceduralGenerator.cs" />
+    <Compile Include="ShuntingUnloadJobProceduralGenerator.cs" />
     <Compile Include="TransportJobProceduralGenerator.cs" />
     <Compile Include="Utilities.cs" />
   </ItemGroup>

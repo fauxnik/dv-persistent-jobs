@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using DV.Logic.Job;
 
@@ -11,41 +12,47 @@ namespace PersistentJobsMod
 
 		protected override void OnLastJobInChainCompleted(Job lastJobInChain)
 		{
-			StaticJobDefinition staticJobDefinition = this.jobChain[this.jobChain.Count - 1];
-			if (staticJobDefinition.job == lastJobInChain && lastJobInChain.jobType == JobType.Transport)
+			StaticJobDefinition lastJobDef = this.jobChain[this.jobChain.Count - 1];
+			if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
 			{
-				StaticTransportJobDefinition staticTransportJobDefinition = staticJobDefinition as StaticTransportJobDefinition;
-				if (staticTransportJobDefinition != null)
+				StaticTransportJobDefinition loadJobDef = lastJobDef as StaticTransportJobDefinition;
+				if (loadJobDef != null)
 				{
-					StationController startingStation = SingletonBehaviour<LogicController>.Instance.YardIdToStationController[staticTransportJobDefinition.logicStation.ID];
-					StationController destStation = SingletonBehaviour<LogicController>.Instance.YardIdToStationController[staticTransportJobDefinition.job.chainData.chainDestinationYardId];
-					staticTransportJobDefinition.job.
+					StationController startingStation = SingletonBehaviour<LogicController>.Instance
+						.YardIdToStationController[loadJobDef.logicStation.ID];
+					StationController destStation = SingletonBehaviour<LogicController>.Instance
+						.YardIdToStationController[loadJobDef.chainData.chainDestinationYardId];
+					Track startingTrack = loadJobDef.destinationTrack;
+					List<TrainCar> trainCars = this.trainCarsForJobChain;
 					System.Random rng = new System.Random(Environment.TickCount);
-					List<CarsPerTrack> carsPerDestinationTrack = staticTransportJobDefinition.carsPerDestinationTrack;
-					for (int i = 0; i < carsPerDestinationTrack.Count; i++)
+					JobChainController jobChainController
+						= ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithExistingCars(
+							startingStation,
+							startingTrack,
+							destStation,
+							trainCars,
+							trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar).ToList(),
+							rng
+						);
+					if (jobChainController != null)
 					{
-						Track track = carsPerDestinationTrack[i].track;
-						List<TrainCar> list = Utilities.ExtractCorrespondingTrainCars(this, carsPerDestinationTrack[i].cars);
-						if (list == null)
+						foreach (TrainCar tc in jobChainController.trainCarsForJobChain)
 						{
-							Debug.LogError("Couldn't find all corresponding trainCars from trainCarsForJobChain!");
-							break;
+							this.trainCarsForJobChain.Remove(tc);
 						}
-						JobChainController jobChainController = ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithExistingCars(startingStation, track, list, rng);
-						if (jobChainController != null)
-						{
-							for (int j = 0; j < list.Count; j++)
-							{
-								this.trainCarsForJobChain.Remove(list[j]);
-							}
-							jobChainController.FinalizeSetupAndGenerateFirstJob();
-							Debug.Log("Generated job chain [" + jobChainController.jobChainGO.name + "]: ", jobChainController.jobChainGO);
-						}
+						jobChainController.FinalizeSetupAndGenerateFirstJob();
+						Debug.Log(
+							"Generated job chain [" + jobChainController.jobChainGO.name + "]: ",
+							jobChainController.jobChainGO
+						);
 					}
 				}
 				else
 				{
-					Debug.LogError("Couldn't convert lastJobDef to StaticTransportDefinition. ShuntingUnload jobs won't be generated.");
+					Debug.LogError(
+						"Couldn't convert lastJobDef to StaticTransportDefinition." +
+						" ShuntingUnload jobs won't be generated."
+					);
 				}
 			}
 			else
