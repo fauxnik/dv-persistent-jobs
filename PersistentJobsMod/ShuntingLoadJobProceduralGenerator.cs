@@ -481,7 +481,8 @@ namespace PersistentJobsMod
 
 		public static IEnumerable<(List<TrainCar>, JobChainController)> doJobGeneration(
 			List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobInfos,
-			System.Random rng)
+			System.Random rng,
+			bool forceCorrectCargoStateOnCars = true)
 		{
 			return jobInfos.Select((definition) =>
 			{
@@ -489,7 +490,7 @@ namespace PersistentJobsMod
 				(StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
 				(_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
 
-				return (tcs, (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng));
+				return (tcs, (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng, forceCorrectCargoStateOnCars));
 			});
 		}
 	}
