@@ -37,9 +37,9 @@ namespace PersistentJobsMod
 						);
 					if (jobChainController != null)
 					{
-						for (int j = 0; j < trainCars.Count; j++)
+						foreach (TrainCar tc in jobChainController.trainCarsForJobChain)
 						{
-							this.trainCarsForJobChain.Remove(trainCars[j]);
+							this.trainCarsForJobChain.Remove(tc);
 						}
 						jobChainController.FinalizeSetupAndGenerateFirstJob();
 						Debug.Log(
