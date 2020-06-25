@@ -398,7 +398,7 @@ namespace PersistentJobsMod
 		class StationProceduralJobGenerator_GenerateOutChainJob_Patch
 		{
 			static bool Prefix(
-				JobChainController __result,
+				ref JobChainController __result,
 				StationController ___stationController,
 				JobType startingJobType,
 				bool forceFulfilledLicenseRequirements = false)
@@ -408,10 +408,13 @@ namespace PersistentJobsMod
 					try
 					{
 						if (startingJobType == JobType.ShuntingLoad)
-												{
-							// TODO: generate job
+						{
+							__result = ShuntingLoadJobProceduralGenerator.GenerateShuntingLoadJobWithCarSpawning(
+								___stationController,
+								forceFulfilledLicenseRequirements,
+								new System.Random(Environment.TickCount));
 							return false;
-												}
+						}
 						else if (startingJobType == JobType.Transport)
 						{
 							__result = TransportJobProceduralGenerator.GenerateTransportJobWithCarSpawning(
