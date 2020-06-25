@@ -357,6 +357,8 @@ namespace PersistentJobsMod
 		class StationProceduralJobGenerator_GenerateInChainJob_Patch
 		{
 			static bool Prefix(
+				ref JobChainController __result,
+				StationController ___stationController,
 				JobType startingJobType,
 				bool forceFulfilledLicenseRequirements = false)
 			{
@@ -366,7 +368,10 @@ namespace PersistentJobsMod
 					{
 						if (startingJobType == JobType.ShuntingUnload)
 						{
-							// TODO: generate job
+							__result = ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithCarSpawning(
+								___stationController,
+								forceFulfilledLicenseRequirements,
+								new System.Random(Environment.TickCount));
 							return false;
 						}
 						thisModEntry.Logger.Warning(string.Format(

@@ -9,6 +9,91 @@ namespace PersistentJobsMod
 {
 	class ShuntingUnloadJobProceduralGenerator
 	{
+		public static JobChainController GenerateShuntingUnloadJobWithCarSpawning(
+			StationController destinationStation,
+			bool forceLicenseReqs,
+			System.Random rng)
+		{
+			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
+			List<CargoGroup> availableCargoGroups = destinationStation.proceduralJobsRuleset.inputCargoGroups;
+			int countTrainCars = rng.Next(
+				destinationStation.proceduralJobsRuleset.minCarsPerJob,
+				destinationStation.proceduralJobsRuleset.maxCarsPerJob);
+
+			if (forceLicenseReqs)
+			{
+				if (!LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
+				{
+					Debug.LogError("Trying to generate a ShuntingUnload job with forceLicenseReqs=true should " +
+						"never happen if player doesn't have Shunting license!");
+					return null;
+				}
+				availableCargoGroups
+					= (from cg in availableCargoGroups
+					   where LicenseManager.IsLicensedForJob(cg.CargoRequiredLicenses)
+					   select cg).ToList();
+				countTrainCars
+					= Math.Min(countTrainCars, LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses());
+			}
+
+			CargoGroup chosenCargoGroup = Utilities.GetRandomFromEnumerable(availableCargoGroups, rng);
+
+			// choose cargo & trainCar types
+			List<CargoType> availableCargoTypes = chosenCargoGroup.cargoTypes;
+			List<CargoType> orderedCargoTypes = new List<CargoType>();
+			List<TrainCarType> orderedTrainCarTypes = new List<TrainCarType>();
+			for (int i = 0; i < countTrainCars; i++)
+			{
+				CargoType chosenCargoType = Utilities.GetRandomFromEnumerable(availableCargoTypes, rng);
+				List<CargoContainerType> availableContainers
+					= CargoTypes.GetCarContainerTypesThatSupportCargoType(chosenCargoType);
+				CargoContainerType chosenContainerType = Utilities.GetRandomFromEnumerable(availableContainers, rng);
+				List<TrainCarType> availableTrainCarTypes
+					= CargoTypes.GetTrainCarTypesThatAreSpecificContainerType(chosenContainerType);
+				TrainCarType chosenTrainCarType = Utilities.GetRandomFromEnumerable(availableTrainCarTypes, rng);
+				orderedCargoTypes.Add(chosenCargoType);
+				orderedTrainCarTypes.Add(chosenTrainCarType);
+			}
+			float approxTrainLength = yto.GetTotalCarTypesLength(orderedTrainCarTypes)
+				+ yto.GetSeparationLengthBetweenCars(countTrainCars);
+
+			// choose starting track
+			Track startingTrack
+				= yto.GetTrackThatHasEnoughFreeSpace(destinationStation.logicStation.yard.TransferInTracks, approxTrainLength);
+			if (startingTrack == null)
+			{
+				Debug.LogWarning("Couldn't find startingTrack with enough free space for train!");
+				return null;
+			}
+
+			// choose random starting station
+			// no need to ensure it has has free space; this is just a back story
+			List<StationController> availableOrigins = new List<StationController>(chosenCargoGroup.stations);
+			StationController startingStation = Utilities.GetRandomFromEnumerable(availableOrigins, rng);
+
+			// spawn trainCars
+			RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
+			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(orderedTrainCarTypes, railTrack, true, 0.0, false, true);
+
+			JobChainController jcc = GenerateShuntingUnloadJobWithExistingCars(
+				startingStation,
+				startingTrack,
+				destinationStation,
+				orderedTrainCars,
+				orderedCargoTypes,
+				rng,
+				true);
+
+			if (jcc == null)
+			{
+				Debug.LogWarning("Couldn't generate job chain. Deleting spawned trainCars!");
+				SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(orderedTrainCars, true);
+				return null;
+			}
+
+			return jcc;
+		}
+
 		public static JobChainController GenerateShuntingUnloadJobWithExistingCars(
 			StationController startingStation,
 			Track startingTrack,
@@ -105,7 +190,8 @@ namespace PersistentJobsMod
 				carsPerDestinationTrack,
 				trainCars,
 				transportedCargoPerCar,
-				Enumerable.Repeat(1.0f, trainCars.Count).ToList(),
+				trainCars.Select(
+					tc => tc.logicCar.CurrentCargoTypeInCar == CargoType.None ? 1.0f : tc.logicCar.LoadedCargoAmount).ToList(),
 				forceCorrectCargoStateOnCars,
 				bonusTimeLimit,
 				initialWage,
