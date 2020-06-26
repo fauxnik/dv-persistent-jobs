@@ -550,7 +550,9 @@ namespace PersistentJobsMod
 			}
 		}
 
-		// divert cars that can be loaded at the current station for later generation of ShuntingLoad jobs
+		// unload: divert cars that can be loaded at the current station for later generation of ShuntingLoad jobs
+		// load: generates a corresponding transport job
+		// transport: generates a corresponding unload job
 		[HarmonyPatch(typeof(JobChainControllerWithEmptyHaulGeneration), "OnLastJobInChainCompleted")]
 		class JobChainControllerWithEmptyHaulGeneration_OnLastJobInChainCompleted_Patch
 		{
@@ -593,13 +595,13 @@ namespace PersistentJobsMod
 											.Intersect(cg.cargoTypes)
 											.Any())))
 								{
-									// registering the cars as jobless prevents generating an EmptyHaul job for them
+									// registering the cars as jobless & removing them from carsPerDestinationTrack
+									// prevents base method from generating an EmptyHaul job for them
 									// they will be candidates for new jobs once the player leaves the area
 									List<TrainCar> tcsToDivert = new List<TrainCar>();
 									foreach(Car c in cpt.cars)
 									{
 										tcsToDivert.Add(TrainCar.logicCarToTrainCar[c]);
-										//__instance.trainCarsForJobChain.Remove(tcsToDivert[tcsToDivert.Count - 1]);
 										tcsToDivert[tcsToDivert.Count - 1].UpdateJobIdOnCarPlates(string.Empty);
 									}
 									JobDebtController.RegisterJoblessCars(tcsToDivert);
