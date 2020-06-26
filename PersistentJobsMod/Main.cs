@@ -218,6 +218,7 @@ namespace PersistentJobsMod
 
 		// simply copied from the patched method
 		// may help keep mod stable across game updates
+		// skip entirely?
 		[HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateJobChain")]
 		class StationProceduralJobGenerator_GenerateJobChain_Patch
 		{
@@ -230,11 +231,11 @@ namespace PersistentJobsMod
 				YardTracksOrganizer ___yto,
 				Yard ___stYard)
 			{
-				if (thisModEntry.Active)
+				if (thisModEntry.Active && false)
 				{
 					try
 					{
-						thisModEntry.Logger.Log("gen job chain setup");
+						Debug.Log("[PersistentJobs] gen job chain setup");
 						Traverse currentRng = Traverse.Create(__instance).Property("currentRng");
 						if (
 							!___generationRuleset.loadStartingJobSupported &&
@@ -245,7 +246,7 @@ namespace PersistentJobsMod
 							return true;
 						}
 						currentRng.SetValue(rng);
-						thisModEntry.Logger.Log("collecting job types");
+						Debug.Log("[PersistentJobs] collecting job types");
 						List<JobType> spawnableJobTypes = new List<JobType>();
 						if (___generationRuleset.loadStartingJobSupported)
 						{
@@ -274,12 +275,13 @@ namespace PersistentJobsMod
 								spawnableJobTypes.Contains(JobType.Transport) &&
 								LicenseManager.IsJobLicenseAcquired(JobLicenses.FreightHaul))
 							{
-								thisModEntry.Logger.Log("A");
+								Debug.Log("A");
 								jobChainController = Traverse.Create(__instance)
 									.Method("GenerateOutChainJob", new Type[] { typeof(JobType), typeof(bool) })
 									.GetValue<JobChainController>(JobType.Transport, true);
 								if (jobChainController != null)
 								{
+									Debug.Log("A: null job chain controller");
 									__result = jobChainController;
 									return false;
 								}
@@ -288,12 +290,13 @@ namespace PersistentJobsMod
 								spawnableJobTypes.Contains(JobType.EmptyHaul) &&
 								LicenseManager.IsJobLicenseAcquired(JobLicenses.LogisticalHaul))
 							{
-								thisModEntry.Logger.Log("B");
+								Debug.Log("B");
 								jobChainController = Traverse.Create(__instance)
 									.Method("GenerateEmptyHaul", new Type[] { typeof(bool) })
 									.GetValue<JobChainController>(true);
 								if (jobChainController != null)
 								{
+									Debug.Log("B: null job chain controller");
 									__result = jobChainController;
 									return false;
 								}
@@ -302,7 +305,7 @@ namespace PersistentJobsMod
 								spawnableJobTypes.Contains(JobType.ShuntingLoad) &&
 								LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
 							{
-								thisModEntry.Logger.Log("C");
+								Debug.Log("C");
 								jobChainController = Traverse.Create(__instance)
 									.Method("GenerateOutChainJob", new Type[] { typeof(JobType), typeof(bool) })
 									.GetValue<JobChainController>(JobType.ShuntingLoad, true);
@@ -316,7 +319,7 @@ namespace PersistentJobsMod
 								spawnableJobTypes.Contains(JobType.ShuntingUnload) &&
 								LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
 							{
-								thisModEntry.Logger.Log("D");
+								Debug.Log("D");
 								jobChainController = Traverse.Create(__instance)
 									.Method("GenerateInChainJob", new Type[] { typeof(JobType), typeof(bool) })
 									.GetValue<JobChainController>(JobType.ShuntingUnload, true);
@@ -333,7 +336,7 @@ namespace PersistentJobsMod
 							spawnableJobTypes.Contains(JobType.Transport) &&
 							countOutTracksAvailable > Mathf.FloorToInt(0.399999976f * (float)___stYard.TransferOutTracks.Count))
 						{
-							thisModEntry.Logger.Log("E");
+							Debug.Log("E");
 							JobType startingJobType = JobType.Transport;
 							jobChainController = Traverse.Create(__instance)
 								.Method("GenerateOutChainJob", new Type[] { typeof(JobType), typeof(bool) })
@@ -346,7 +349,7 @@ namespace PersistentJobsMod
 								__result = null;
 								return false;
 							}
-							thisModEntry.Logger.Log("F");
+							Debug.Log("F");
 							JobType startingJobType = Utilities.GetRandomFromEnumerable(spawnableJobTypes, rng);
 							/* TODO: how to Traverse generic methods?
 							JobType startingJobType = Traverse.Create(__instance)
@@ -356,19 +359,19 @@ namespace PersistentJobsMod
 							{
 								case JobType.ShuntingLoad:
 								case JobType.Transport:
-									thisModEntry.Logger.Log("G");
+									Debug.Log("G");
 									jobChainController = Traverse.Create(__instance)
 										.Method("GenerateOutChainJob", new Type[] { typeof(JobType), typeof(bool) })
 										.GetValue<JobChainController>(startingJobType, false);
 									break;
 								case JobType.ShuntingUnload:
-									thisModEntry.Logger.Log("H");
+									Debug.Log("H");
 									jobChainController = Traverse.Create(__instance)
 										.Method("GenerateInChainJob", new Type[] { typeof(JobType), typeof(bool) })
 										.GetValue<JobChainController>(startingJobType, false);
 									break;
 								case JobType.EmptyHaul:
-									thisModEntry.Logger.Log("I");
+									Debug.Log("I");
 									jobChainController = Traverse.Create(__instance)
 										.Method("GenerateEmptyHaul", new Type[] { typeof(bool) })
 										.GetValue<JobChainController>(false);
@@ -411,15 +414,15 @@ namespace PersistentJobsMod
 					{
 						if (startingJobType == JobType.ShuntingUnload)
 						{
-							thisModEntry.Logger.Log("gen in shunting unload");
+							Debug.Log("[PersistentJobs] gen in shunting unload");
 							__result = ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithCarSpawning(
 								___stationController,
 								forceFulfilledLicenseRequirements,
 								new System.Random(Environment.TickCount));
 							return false;
 						}
-						thisModEntry.Logger.Warning(string.Format(
-							"Got unexpected JobType.{0} in {1}.{2} {3} patch. Falling back to base method.",
+						Debug.LogWarning(string.Format(
+							"[PersistentJobs] Got unexpected JobType.{0} in {1}.{2} {3} patch. Falling back to base method.",
 							startingJobType.ToString(),
 							"StationProceduralJobGenerator",
 							"GenerateInChainJob",
@@ -458,7 +461,7 @@ namespace PersistentJobsMod
 					{
 						if (startingJobType == JobType.ShuntingLoad)
 						{
-							thisModEntry.Logger.Log("gen out shunting load");
+							Debug.Log("[PersistentJobs] gen out shunting load");
 							__result = ShuntingLoadJobProceduralGenerator.GenerateShuntingLoadJobWithCarSpawning(
 								___stationController,
 								forceFulfilledLicenseRequirements,
@@ -467,15 +470,15 @@ namespace PersistentJobsMod
 						}
 						else if (startingJobType == JobType.Transport)
 						{
-							thisModEntry.Logger.Log("gen out transport");
+							Debug.Log("[PersistentJobs] gen out transport");
 							__result = TransportJobProceduralGenerator.GenerateTransportJobWithCarSpawning(
 								___stationController,
 								forceFulfilledLicenseRequirements,
 								new System.Random(Environment.TickCount));
 							return false;
 						}
-						thisModEntry.Logger.Warning(string.Format(
-							"Got unexpected JobType.{0} in {1}.{2} {3} patch. Falling back to base method.",
+						Debug.LogWarning(string.Format(
+							"[PersistentJobs] Got unexpected JobType.{0} in {1}.{2} {3} patch. Falling back to base method.",
 							startingJobType.ToString(),
 							"StationProceduralJobGenerator",
 							"GenerateOutChainJob",
@@ -536,13 +539,13 @@ namespace PersistentJobsMod
 				List<StaticJobDefinition> ___jobChain,
 				Job lastJobInChain)
 			{
-				thisModEntry.Logger.Log("last job chain empty haul gen");
+				Debug.Log("[PersistentJobs] last job chain empty haul gen");
 				try
 				{
 					StaticJobDefinition lastJobDef = ___jobChain[___jobChain.Count - 1];
 					if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingUnload)
 					{
-						thisModEntry.Logger.Log("checking static definition type");
+						Debug.Log("[PersistentJobs] checking static definition type");
 						StaticShuntingUnloadJobDefinition unloadJobDef = lastJobDef as StaticShuntingUnloadJobDefinition;
 						if (unloadJobDef != null)
 						{
@@ -550,7 +553,7 @@ namespace PersistentJobsMod
 								.YardIdToStationController[lastJobInChain.chainData.chainDestinationYardId];
 							List<CargoGroup> availableCargoGroups = station.proceduralJobsRuleset.outputCargoGroups;
 
-							thisModEntry.Logger.Log("diverting trainCars");
+							Debug.Log("[PersistentJobs] diverting trainCars");
 							// if a trainCar set can be reused at the current station, keep them there
 							foreach (CarsPerTrack cpt in unloadJobDef.carsPerDestinationTrack)
 							{
@@ -568,8 +571,8 @@ namespace PersistentJobsMod
 						}
 						else
 						{
-							Debug.LogError("Couldn't convert lastJobDef to StaticShuntingUnloadJobDefinition. " +
-								"EmptyHaul jobs won't be generated.");
+							Debug.LogError("[PersistentJobs] Couldn't convert lastJobDef to " +
+								"StaticShuntingUnloadJobDefinition. EmptyHaul jobs won't be generated.");
 						}
 					}
 					else if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
@@ -602,7 +605,7 @@ namespace PersistentJobsMod
 								}
 								jobChainController.FinalizeSetupAndGenerateFirstJob();
 								Debug.Log(string.Format(
-									"Generated job chain (via patch) [{0}]: {1}",
+									"[PersistentJobs] Generated job chain [{0}]: {1}",
 									jobChainController.jobChainGO.name,
 									jobChainController.jobChainGO));
 							}
@@ -610,7 +613,7 @@ namespace PersistentJobsMod
 						else
 						{
 							Debug.LogError(
-								"Couldn't convert lastJobDef to StaticShuntingLoadDefinition." +
+								"[PersistentJobs] Couldn't convert lastJobDef to StaticShuntingLoadDefinition." +
 								" Transport jobs won't be generated."
 							);
 						}
@@ -644,7 +647,7 @@ namespace PersistentJobsMod
 								}
 								jobChainController.FinalizeSetupAndGenerateFirstJob();
 								Debug.Log(string.Format(
-									"Generated job chain (via patch) [{0}]: {1}",
+									"[PersistentJobs] Generated job chain [{0}]: {1}",
 									jobChainController.jobChainGO.name,
 									jobChainController.jobChainGO));
 							}
@@ -652,7 +655,7 @@ namespace PersistentJobsMod
 						else
 						{
 							Debug.LogError(
-								"Couldn't convert lastJobDef to StaticTransportDefinition." +
+								"[PersistentJobs] Couldn't convert lastJobDef to StaticTransportDefinition." +
 								" ShuntingUnload jobs won't be generated."
 							);
 						}
@@ -660,8 +663,8 @@ namespace PersistentJobsMod
 					else
 					{
 						Debug.LogError(string.Format(
-							"Unexpected job chain format: {0}. The last job in chain must be ShuntingLoad, " +
-							"Transport, or ShuntingUnload for JobChainControllerWithEmptyHaulGeneration patch! " +
+							"[PersistentJobs] Unexpected job chain format: {0}. The last job in chain must be " +
+							"ShuntingLoad, Transport, or ShuntingUnload for JobChainControllerWithEmptyHaulGeneration patch! " +
 							"New jobs won't be generated."));
 					}
 				}
@@ -697,7 +700,7 @@ namespace PersistentJobsMod
 							return false;
 						}
 
-						thisModEntry.Logger.Log("collecting deletion candidates");
+						Debug.Log("[PersistentJobs] collecting deletion candidates");
 						List<TrainCar> trainCarsToDelete = new List<TrainCar>();
 						for (int i = ___unusedTrainCarsMarkedForDelete.Count - 1; i >= 0; i--)
 						{
@@ -717,6 +720,9 @@ namespace PersistentJobsMod
 								___carVisitCheckersMap.Remove(trainCar);
 							}
 						}
+						Debug.Log(string.Format(
+							"[PersistentJobs] found {0} cars marked for deletion",
+							trainCarsToDelete.Count));
 						if (trainCarsToDelete.Count == 0)
 						{
 							return false;
@@ -724,43 +730,50 @@ namespace PersistentJobsMod
 
 						// ------ BEGIN JOB GENERATION ------
 						// group trainCars by trainset
-						thisModEntry.Logger.Log("grouping trainCars by trainSet");
+						Debug.Log("[PersistentJobs] grouping trainCars by trainSet");
 						Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet
 								= ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarsToDelete);
 
 						// group trainCars sets by nearest stationController
-						thisModEntry.Logger.Log("grouping trainSets by station");
+						Debug.Log("[PersistentJobs] grouping trainSets by station");
 						Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
 							= ShuntingLoadJobProceduralGenerator.GroupTrainCarSetsByNearestStation(trainCarsPerTrainSet);
 
 						// populate possible cargoGroups per group of trainCars
-						thisModEntry.Logger.Log("populating cargoGroups");
+						Debug.Log("[PersistentJobs] populating cargoGroups");
 						ShuntingLoadJobProceduralGenerator.PopulateCargoGroupsPerTrainCarSet(cgsPerTcsPerSc);
 
 						// pick new jobs for the trainCars at each station
-						thisModEntry.Logger.Log("picking jobs");
+						Debug.Log("[PersistentJobs] picking jobs");
 						System.Random rng = new System.Random(Environment.TickCount);
 						List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
 							jobInfos = ShuntingLoadJobProceduralGenerator
 								.ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(cgsPerTcsPerSc, rng);
 
 						// try to generate jobs
-						thisModEntry.Logger.Log("generating jobs");
+						Debug.Log("[PersistentJobs] generating jobs");
 						IEnumerable<JobChainController> jobChainControllers
 							= ShuntingLoadJobProceduralGenerator.doJobGeneration(jobInfos, rng);
+						Debug.Log(string.Format(
+							"[PersistentJobs] generated {0} jobs",
+							jobChainControllers.Where(jcc => jcc != null).Count()));
 
 						// preserve trainCars for which a new job was generated
-						thisModEntry.Logger.Log("preserving cars");
+						Debug.Log("[PersistentJobs] preserving cars");
+						int totalCarsPreserved = 0;
 						foreach (JobChainController jcc in jobChainControllers)
 						{
 							if (jcc != null)
 							{
 								jcc.trainCarsForJobChain.ForEach(tc => trainCarsToDelete.Remove(tc));
+								totalCarsPreserved += jcc.trainCarsForJobChain.Count;
 							}
 						}
+						Debug.Log(string.Format("[PersistentJobs] preserved {0} cars", totalCarsPreserved));
 						// ------ END JOB GENERATION ------
 
 						SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(trainCarsToDelete, true);
+						Debug.Log(string.Format("[PersistentJobs] deleted {0} cars", trainCarsToDelete.Count));
 						return false;
 					}
 					catch (Exception e)
@@ -841,7 +854,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				thisModEntry.Logger.Log("collecting deletion candiates (coroutine)");
+				Debug.Log("[PersistentJobs] collecting deletion candiates (coroutine)");
 				try
 				{
 					trainCarCandidatesForDelete.Clear();
@@ -858,6 +871,9 @@ namespace PersistentJobsMod
 							trainCarCandidatesForDelete.Add(trainCar);
 						}
 					}
+					Debug.Log(string.Format(
+						"[PersistentJobs] found {0} cars marked for deletion (coroutine)",
+						trainCarsToDelete.Count));
 					if (trainCarCandidatesForDelete.Count == 0)
 					{
 						continue;
@@ -876,7 +892,7 @@ namespace PersistentJobsMod
 
 				// ------ BEGIN JOB GENERATION ------
 				// group trainCars by trainset
-				thisModEntry.Logger.Log("grouping trainCars by trainSet (coroutine)");
+				Debug.Log("[PersistentJobs] grouping trainCars by trainSet (coroutine)");
 				Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet = null;
 				try
 				{
@@ -895,7 +911,7 @@ namespace PersistentJobsMod
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// group trainCars sets by nearest stationController
-				thisModEntry.Logger.Log("grouping trainSets by station (coroutine)");
+				Debug.Log("[PersistentJobs] grouping trainSets by station (coroutine)");
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc = null;
 				try
 				{
@@ -914,7 +930,7 @@ namespace PersistentJobsMod
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// populate possible cargoGroups per group of trainCars
-				thisModEntry.Logger.Log("populating cargoGroups (coroutine)");
+				Debug.Log("[PersistentJobs] populating cargoGroups (coroutine)");
 				try
 				{
 					ShuntingLoadJobProceduralGenerator.PopulateCargoGroupsPerTrainCarSet(cgsPerTcsPerSc);
@@ -931,7 +947,7 @@ namespace PersistentJobsMod
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// pick new jobs for the trainCars at each station
-				thisModEntry.Logger.Log("picking jobs (coroutine)");
+				Debug.Log("[PersistentJobs] picking jobs (coroutine)");
 				System.Random rng = new System.Random(Environment.TickCount);
 				List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
 					jobInfos = null;
@@ -952,7 +968,7 @@ namespace PersistentJobsMod
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// try to generate jobs
-				thisModEntry.Logger.Log("generating jobs (coroutine)");
+				Debug.Log("[PersistentJobs] generating jobs (coroutine)");
 				IEnumerable<JobChainController> jobChainControllers = null;
 				try
 				{
@@ -967,11 +983,15 @@ namespace PersistentJobsMod
 					));
 					OnCriticalFailure();
 				}
+				Debug.Log(string.Format(
+					"[PersistentJobs] generated {0} jobs",
+					jobChainControllers.Where(jcc => jcc != null).Count()));
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// preserve trainCars for which a new job was generated
-				thisModEntry.Logger.Log("preserving cars (coroutine)");
+				Debug.Log("[PersistentJobs] preserving cars (coroutine)");
+				int totalCarsPreserved = 0;
 				try
 				{
 					foreach (JobChainController jcc in jobChainControllers)
@@ -979,8 +999,10 @@ namespace PersistentJobsMod
 						if (jcc != null)
 						{
 							jcc.trainCarsForJobChain.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
+							totalCarsPreserved += jcc.trainCarsForJobChain.Count;
 						}
 					}
+					Debug.Log(string.Format("[PersistentJobs] preserved {0} cars", totalCarsPreserved));
 				}
 				catch (Exception e)
 				{
@@ -994,7 +1016,7 @@ namespace PersistentJobsMod
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
-				thisModEntry.Logger.Log("deleting cars (coroutine)");
+				Debug.Log("[PersistentJobs] deleting cars (coroutine)");
 				try
 				{
 					trainCarsToDelete.Clear();
@@ -1028,6 +1050,7 @@ namespace PersistentJobsMod
 						SingletonBehaviour<CarSpawner>.Instance
 							.DeleteTrainCars(new List<TrainCar>(trainCarsToDelete), false);
 					}
+					Debug.Log(string.Format("[PersistentJobs] deleted {0} cars (coroutine)", trainCarsToDelete.Count));
 				}
 				catch (Exception e)
 				{
@@ -1048,7 +1071,7 @@ namespace PersistentJobsMod
 			{
 				if (thisModEntry.Active)
 				{
-					thisModEntry.Logger.Log("getting track with free space");
+					Debug.Log("[PersistentJobs] getting track with free space");
 					try
 					{
 						__result = null;
@@ -1069,8 +1092,8 @@ namespace PersistentJobsMod
 					}
 					catch (Exception e)
 					{
-						thisModEntry.Logger.Warning(string.Format(
-							"Exception thrown during {0}.{1} {2} patch:\n{3}\nFalling back on base method.",
+						Debug.LogWarning(string.Format(
+							"[PersistentJobs] Exception thrown during {0}.{1} {2} patch:\n{3}\nFalling back on base method.",
 							"YardTracksOrganizer",
 							"GetTrackThatHasEnoughFreeSpace",
 							"prefix",

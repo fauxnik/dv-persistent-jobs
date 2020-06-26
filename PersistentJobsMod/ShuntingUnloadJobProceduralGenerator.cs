@@ -14,6 +14,7 @@ namespace PersistentJobsMod
 			bool forceLicenseReqs,
 			System.Random rng)
 		{
+			Debug.Log("[PersistentJobs] unload: generating with car spawning");
 			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
 			List<CargoGroup> availableCargoGroups = destinationStation.proceduralJobsRuleset.inputCargoGroups;
 			int countTrainCars = rng.Next(
@@ -22,10 +23,11 @@ namespace PersistentJobsMod
 
 			if (forceLicenseReqs)
 			{
+				Debug.Log("[PersistentJobs] unload: forcing license requirements");
 				if (!LicenseManager.IsJobLicenseAcquired(JobLicenses.Shunting))
 				{
-					Debug.LogError("Trying to generate a ShuntingUnload job with forceLicenseReqs=true should " +
-						"never happen if player doesn't have Shunting license!");
+					Debug.LogError("[PersistentJobs] unload: Trying to generate a ShuntingUnload job with " +
+						"forceLicenseReqs=true should never happen if player doesn't have Shunting license!");
 					return null;
 				}
 				availableCargoGroups
@@ -39,6 +41,7 @@ namespace PersistentJobsMod
 			CargoGroup chosenCargoGroup = Utilities.GetRandomFromEnumerable(availableCargoGroups, rng);
 
 			// choose cargo & trainCar types
+			Debug.Log("[PersistentJobs] unload: choosing cargo & trainCar types");
 			List<CargoType> availableCargoTypes = chosenCargoGroup.cargoTypes;
 			List<CargoType> orderedCargoTypes = new List<CargoType>();
 			List<TrainCarType> orderedTrainCarTypes = new List<TrainCarType>();
@@ -58,20 +61,23 @@ namespace PersistentJobsMod
 				+ yto.GetSeparationLengthBetweenCars(countTrainCars);
 
 			// choose starting track
+			Debug.Log("[PersistentJobs] unload: choosing starting track");
 			Track startingTrack
 				= yto.GetTrackThatHasEnoughFreeSpace(destinationStation.logicStation.yard.TransferInTracks, approxTrainLength);
 			if (startingTrack == null)
 			{
-				Debug.LogWarning("Couldn't find startingTrack with enough free space for train!");
+				Debug.LogWarning("[PersistentJobs] unload: Couldn't find startingTrack with enough free space for train!");
 				return null;
 			}
 
 			// choose random starting station
 			// no need to ensure it has has free space; this is just a back story
+			Debug.Log("[PersistentJobs] unload: choosing origin (inconsequential)");
 			List<StationController> availableOrigins = new List<StationController>(chosenCargoGroup.stations);
 			StationController startingStation = Utilities.GetRandomFromEnumerable(availableOrigins, rng);
 
 			// spawn trainCars
+			Debug.Log("[PersistentJobs] unload: spawning trainCars");
 			RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
 			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(orderedTrainCarTypes, railTrack, true, 0.0, false, true);
 
@@ -86,7 +92,7 @@ namespace PersistentJobsMod
 
 			if (jcc == null)
 			{
-				Debug.LogWarning("Couldn't generate job chain. Deleting spawned trainCars!");
+				Debug.LogWarning("[PersistentJobs] unload: Couldn't generate job chain. Deleting spawned trainCars!");
 				SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(orderedTrainCars, true);
 				return null;
 			}
@@ -103,6 +109,7 @@ namespace PersistentJobsMod
 			System.Random rng,
 			bool forceCorrectCargoStateOnCars = false)
 		{
+			Debug.Log("[PersistentJobs] unload: generating with pre-spawned cars");
 			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
 			HashSet<CargoContainerType> carContainerTypes = new HashSet<CargoContainerType>();
 			for (int i = 0; i < trainCars.Count; i++)
@@ -111,13 +118,16 @@ namespace PersistentJobsMod
 			}
 			float approxTrainLength = yto.GetTotalTrainCarsLength(trainCars)
 				+ yto.GetSeparationLengthBetweenCars(trainCars.Count);
+
+			// choose warehouse machine
+			Debug.Log("[PersistentJobs] unload: choosing warehouse machine");
 			List<WarehouseMachineController> supportedWMCs = startingStation.warehouseMachineControllers
 					.Where(wm => wm.supportedCargoTypes.Intersect(transportedCargoPerCar).Count() > 0)
 					.ToList();
 			if (supportedWMCs.Count == 0)
 			{
 				Debug.LogWarning(string.Format(
-					"Could not create ChainJob[{0}]: {1} - {2}. Found no supported WarehouseMachine!",
+					"[PersistentJobs] unload: Could not create ChainJob[{0}]: {1} - {2}. Found no supported WarehouseMachine!",
 					JobType.ShuntingLoad,
 					startingStation.logicStation.ID,
 					destStation.logicStation.ID));
@@ -127,6 +137,7 @@ namespace PersistentJobsMod
 
 			// choose destination tracks
 			int countTracks = rng.Next(1, startingStation.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
+			Debug.Log(string.Format("[PersistentJobs] unload: choosing {0} destination tracks", countTracks));
 			List<Track> destinationTracks = new List<Track>();
 			do
 			{
@@ -146,7 +157,8 @@ namespace PersistentJobsMod
 			if (destinationTracks.Count == 0)
 			{
 				Debug.LogWarning(string.Format(
-					"Could not create ChainJob[{0}]: {1} - {2}. Found no StorageTrack with enough free space!",
+					"[PersistentJobs] unload: Could not create ChainJob[{0}]: {1} - {2}. " +
+					"Found no StorageTrack with enough free space!",
 					JobType.ShuntingUnload,
 					startingStation.logicStation.ID,
 					destStation.logicStation.ID));
@@ -156,6 +168,10 @@ namespace PersistentJobsMod
 			// divide trainCars between destination tracks
 			int countCarsPerTrainset = trainCars.Count / destinationTracks.Count;
 			int countTrainsetsWithExtraCar = trainCars.Count % destinationTracks.Count;
+			Debug.Log(string.Format(
+				"[PersistentJobs] unload: dividing trainCars {0} per track with {1} extra",
+				countCarsPerTrainset,
+				countTrainsetsWithExtraCar));
 			List<TrainCar> orderedTrainCars = new List<TrainCar>();
 			List<CarsPerTrack> carsPerDestinationTrack = new List<CarsPerTrack>();
 			for (int i = 0; i < destinationTracks.Count; i++)
@@ -169,6 +185,7 @@ namespace PersistentJobsMod
 						(from car in trainCars.GetRange(rangeStart, rangeCount) select car.logicCar).ToList()));
 			}
 
+			Debug.Log("[PersistentJobs] unload: calculating time/wage/licenses");
 			float bonusTimeLimit;
 			float initialWage;
 			Utilities.CalculateShuntingBonusTimeLimitAndWage(
@@ -212,6 +229,12 @@ namespace PersistentJobsMod
 			float initialWage,
 			JobLicenses requiredLicenses)
 		{
+			Debug.Log(string.Format(
+				"[PersistentJobs] unload: attempting to generate ChainJob[{0}]: {1} - {2}",
+				JobType.ShuntingLoad,
+				startingStation.logicStation.ID,
+				destStation.logicStation.ID
+			));
 			GameObject gameObject = new GameObject(string.Format(
 				"ChainJob[{0}]: {1} - {2}",
 				JobType.ShuntingUnload,
