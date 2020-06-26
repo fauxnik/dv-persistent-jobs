@@ -345,11 +345,15 @@ namespace PersistentJobsMod
 		public static Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>>
 			GroupTrainCarSetsByNearestStation(Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet)
 		{
-			StationController[] stationControllers
-				= SingletonBehaviour<LogicController>.Instance.GetComponents<StationController>();
+			IEnumerable<StationController> stationControllers
+				= SingletonBehaviour<LogicController>.Instance.YardIdToStationController.Values;
 			Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
 						= new Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>>();
 			float abandonmentThreshold = 1.2f * Main.DVJobDestroyDistanceRegular;
+			Debug.Log(string.Format(
+				"[PersistentJobs] station grouping: # of trainSets: {0}, # of stations: {1}",
+				trainCarsPerTrainSet.Values.Count,
+				stationControllers.Count()));
 			foreach (List<TrainCar> tcs in trainCarsPerTrainSet.Values)
 			{
 				SortedList<float, StationController> stationsByDistance
@@ -358,7 +362,16 @@ namespace PersistentJobsMod
 				{
 					// since all trainCars in the trainset are coupled,
 					// use the position of the first one to approximate the position of the trainset
-					float distance = (tcs[0].transform.position - sc.transform.position).sqrMagnitude;
+					Vector3 trainPosition = tcs[0].gameObject.transform.position;
+					Vector3 stationPosition = sc.gameObject.transform.position;
+					float distance = (trainPosition - stationPosition).sqrMagnitude;
+					Debug.Log(string.Format(
+						"[PersistentJobs] station grouping: train position {0}, station position {1}, " +
+						"distance {2:F}, threshold {3:F}",
+						trainPosition,
+						stationPosition,
+						distance,
+						abandonmentThreshold));
 					// only create jobs for trainCars within a reasonable range of a station
 					if (distance < abandonmentThreshold)
 					{
@@ -368,14 +381,20 @@ namespace PersistentJobsMod
 				if (stationsByDistance.Count == 0)
 				{
 					// trainCars not near any station; abandon them
+					Debug.Log("[PersistentJobs] station grouping: train not near any station; abandoning train");
 					continue;
 				}
 				// the first station is the closest
-				if (!cgsPerTcsPerSc.ContainsKey(stationsByDistance[0]))
+				KeyValuePair<float, StationController> closestStation = stationsByDistance.ElementAt(0);
+				if (!cgsPerTcsPerSc.ContainsKey(closestStation.Value))
 				{
-					cgsPerTcsPerSc.Add(stationsByDistance[0], new List<(List<TrainCar>, List<CargoGroup>)>());
+					cgsPerTcsPerSc.Add(closestStation.Value, new List<(List<TrainCar>, List<CargoGroup>)>());
 				}
-				cgsPerTcsPerSc[stationsByDistance[0]].Add((tcs, new List<CargoGroup>()));
+				Debug.Log(string.Format(
+					"[PersistentJobs] station grouping: assigning train to {0} with distance {1:F}",
+					closestStation.Value,
+					closestStation.Key));
+				cgsPerTcsPerSc[closestStation.Value].Add((tcs, new List<CargoGroup>()));
 			}
 			return cgsPerTcsPerSc;
 		}
@@ -451,11 +470,13 @@ namespace PersistentJobsMod
 								isFulfillingLicenseReqs = true;
 							}
 						}
-						else if (isFulfillingLicenseReqs &&
-								(licensedCargoGroups.Count == 0 ||
-								cargoGroupsToUse.Intersect(licensedCargoGroups).Count() == 0 ||
-								trainCarsToLoad.Count + trainCarsToAdd.Count <= maxCarsLicensed) ||
-								cargoGroupsToUse.Intersect(availableCargoGroups).Count() == 0)
+						else if ((isFulfillingLicenseReqs &&
+									(licensedCargoGroups.Count == 0 ||
+										(cargoGroupsToUse.Count() > 0 &&
+											cargoGroupsToUse.Intersect(licensedCargoGroups).Count() == 0) ||
+										trainCarsToLoad.Count + trainCarsToAdd.Count <= maxCarsLicensed)) ||
+								(cargoGroupsToUse.Count() > 0 &&
+									cargoGroupsToUse.Intersect(availableCargoGroups).Count() == 0))
 						{
 							// either trying to satisfy licenses, but these trainCars aren't compatible
 							//   or the cargoGroups for these trainCars aren't compatible
@@ -468,13 +489,15 @@ namespace PersistentJobsMod
 							= isFulfillingLicenseReqs ? licensedCargoGroups : availableCargoGroups;
 
 						// if we've made it this far, we can add these trainCars to the job
-						cargoGroupsToUse = cargoGroupsToUse.Intersect(availableCargoGroups);
+						cargoGroupsToUse = cargoGroupsToUse.Count() > 0
+							? cargoGroupsToUse.Intersect(availableCargoGroups)
+							: availableCargoGroups;
 						trainCarsToLoad.AddRange(trainCarsToAdd);
 						cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
 						countTracks--;
 					}
 
-					if (trainCarsToLoad.Count == 0)
+					if (trainCarsToLoad.Count == 0 || cargoGroupsToUse.Count() == 0)
 					{
 						// no more jobs can be made from the trainCar sets at this station; abandon the rest
 						break;

@@ -18,7 +18,11 @@ namespace PersistentJobsMod
 		private static bool isModBroken = false;
 		private static float initialDistanceRegular = 0f;
 		private static float initialDistanceAnyJobTaken = 0f;
+#if DEBUG
+		private static float PERIOD = 60f;
+#else
 		private static float PERIOD = 5f * 60f;
+#endif
 		public static float DVJobDestroyDistanceRegular { get { return initialDistanceRegular; } }
 
 		static void Load(UnityModManager.ModEntry modEntry)
@@ -770,11 +774,17 @@ namespace PersistentJobsMod
 						Debug.Log("[PersistentJobs] grouping trainCars by trainSet");
 						Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet
 								= ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarsToDelete);
+						Debug.Log(string.Format(
+							"[PersistentJobs] found {0} trainSets",
+							trainCarsPerTrainSet.Count));
 
 						// group trainCars sets by nearest stationController
-						Debug.Log("[PersistentJobs] grouping trainSets by station");
+						Debug.Log("[PersistentJobs] grouping trainSets by nearest station");
 						Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc
 							= ShuntingLoadJobProceduralGenerator.GroupTrainCarSetsByNearestStation(trainCarsPerTrainSet);
+						Debug.Log(string.Format(
+							"[PersistentJobs] found {0} stations",
+							cgsPerTcsPerSc.Count));
 
 						// populate possible cargoGroups per group of trainCars
 						Debug.Log("[PersistentJobs] populating cargoGroups");
@@ -786,6 +796,9 @@ namespace PersistentJobsMod
 						List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
 							jobInfos = ShuntingLoadJobProceduralGenerator
 								.ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(cgsPerTcsPerSc, rng);
+						Debug.Log(string.Format(
+							"[PersistentJobs] chose {0} jobs",
+							jobInfos.Count));
 
 						// try to generate jobs
 						Debug.Log("[PersistentJobs] generating jobs");
@@ -804,6 +817,7 @@ namespace PersistentJobsMod
 							{
 								jcc.trainCarsForJobChain.ForEach(tc => trainCarsToDelete.Remove(tc));
 								totalCarsPreserved += jcc.trainCarsForJobChain.Count;
+								jcc.FinalizeSetupAndGenerateFirstJob();
 							}
 						}
 						Debug.Log(string.Format("[PersistentJobs] preserved {0} cars", totalCarsPreserved));
@@ -891,7 +905,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 
-				Debug.Log("[PersistentJobs] collecting deletion candiates (coroutine)");
+				Debug.Log("[PersistentJobs] collecting deletion candidates (coroutine)");
 				try
 				{
 					trainCarCandidatesForDelete.Clear();
@@ -944,11 +958,14 @@ namespace PersistentJobsMod
 					));
 					OnCriticalFailure();
 				}
+				Debug.Log(string.Format(
+					"[PersistentJobs] found {0} trainSets (coroutine)",
+					trainCarsPerTrainSet.Count));
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// group trainCars sets by nearest stationController
-				Debug.Log("[PersistentJobs] grouping trainSets by station (coroutine)");
+				Debug.Log("[PersistentJobs] grouping trainSets by nearest station (coroutine)");
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc = null;
 				try
 				{
@@ -963,6 +980,9 @@ namespace PersistentJobsMod
 					));
 					OnCriticalFailure();
 				}
+				Debug.Log(string.Format(
+					"[PersistentJobs] found {0} stations (coroutine)",
+					cgsPerTcsPerSc.Count));
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
@@ -1001,6 +1021,9 @@ namespace PersistentJobsMod
 					));
 					OnCriticalFailure();
 				}
+				Debug.Log(string.Format(
+					"[PersistentJobs] chose {0} jobs (coroutine)",
+					jobInfos.Count));
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
@@ -1021,7 +1044,7 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 				Debug.Log(string.Format(
-					"[PersistentJobs] generated {0} jobs",
+					"[PersistentJobs] generated {0} jobs (coroutine)",
 					jobChainControllers.Where(jcc => jcc != null).Count()));
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
@@ -1037,9 +1060,10 @@ namespace PersistentJobsMod
 						{
 							jcc.trainCarsForJobChain.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
 							totalCarsPreserved += jcc.trainCarsForJobChain.Count;
+							jcc.FinalizeSetupAndGenerateFirstJob();
 						}
 					}
-					Debug.Log(string.Format("[PersistentJobs] preserved {0} cars", totalCarsPreserved));
+					Debug.Log(string.Format("[PersistentJobs] preserved {0} cars (coroutine)", totalCarsPreserved));
 				}
 				catch (Exception e)
 				{
