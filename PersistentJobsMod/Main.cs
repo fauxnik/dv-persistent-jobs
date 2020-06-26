@@ -339,9 +339,11 @@ namespace PersistentJobsMod
 								return false;
 							}
 							thisModEntry.Logger.Log("F");
+							JobType startingJobType = Utilities.GetRandomFromEnumerable(spawnableJobTypes, rng);
+							/* TODO: how to Traverse generic methods?
 							JobType startingJobType = Traverse.Create(__instance)
-								.Method("GetRandomFromList", new Type[] { typeof(List<JobType>) })
-								.GetValue<JobType>(spawnableJobTypes);
+								.Method("GetRandomFromList", new Type[] { typeof(List<T>) })
+								.GetValue<JobType>(spawnableJobTypes);*/
 							switch (startingJobType)
 							{
 								case JobType.ShuntingLoad:
@@ -560,7 +562,7 @@ namespace PersistentJobsMod
 				}
 				catch (Exception e)
 				{
-
+					// TODO: log & handle exception
 				}
 			}
 		}
@@ -956,14 +958,14 @@ namespace PersistentJobsMod
 					}
 					catch (Exception e)
 					{
-						thisModEntry.Logger.Error(string.Format(
-							"Exception thrown during {0}.{1} {2} patch:\n{3}",
+						thisModEntry.Logger.Warning(string.Format(
+							"Exception thrown during {0}.{1} {2} patch:\n{3}\nFalling back on base method.",
 							"YardTracksOrganizer",
 							"GetTrackThatHasEnoughFreeSpace",
 							"prefix",
 							e.ToString()
 						));
-						OnCriticalFailure();
+						// OnCriticalFailure();
 					}
 				}
 				return true;

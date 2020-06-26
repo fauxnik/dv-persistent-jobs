@@ -53,20 +53,25 @@ namespace PersistentJobsMod
 				orderedCargoTypes.Add(chosenCargoType);
 				orderedTrainCarTypes.Add(chosenTrainCarType);
 			}
-			float approxTrainLength = yto.GetTotalCarTypesLength(orderedTrainCarTypes)
-				+ yto.GetSeparationLengthBetweenCars(countTrainCars);
 
 			// choose starting tracks
 			int countTracks = rng.Next(1, startingStation.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
+			int countCarsPerTrainset = countTrainCars / countTracks;
+			int countTrainsetsWithExtraCar = countTrainCars % countTracks;
 			List<Track> tracks = new List<Track>();
 			do
 			{
 				tracks.Clear();
 				for (int i = 0; i < countTracks; i++)
 				{
+					int rangeStart = i * countCarsPerTrainset + Math.Min(i, countTrainsetsWithExtraCar);
+					int rangeCount = i < countTrainsetsWithExtraCar ? countCarsPerTrainset + 1 : countCarsPerTrainset;
+					List<TrainCarType> trainCarTypesPerTrack = orderedTrainCarTypes.GetRange(rangeStart, rangeCount);
+					float approxTrainLengthPerTrack = yto.GetTotalCarTypesLength(trainCarTypesPerTrack)
+						+ yto.GetSeparationLengthBetweenCars(trainCarTypesPerTrack.Count);
 					Track track = yto.GetTrackThatHasEnoughFreeSpace(
 						startingStation.logicStation.yard.StorageTracks.Except(tracks).ToList(),
-						approxTrainLength / (float)countTracks);
+						approxTrainLengthPerTrack / (float)countTracks);
 					if (track == null)
 					{
 						break;
@@ -81,6 +86,8 @@ namespace PersistentJobsMod
 			}
 
 			// choose random destination station that has at least 1 available track
+			float approxTrainLength = yto.GetTotalCarTypesLength(orderedTrainCarTypes)
+				+ yto.GetSeparationLengthBetweenCars(countTrainCars);
 			List<StationController> availableDestinations = new List<StationController>(chosenCargoGroup.stations);
 			StationController destStation = null;
 			Track destinationTrack = null;
@@ -99,14 +106,17 @@ namespace PersistentJobsMod
 			}
 
 			// spawn trainCars & form carsPerStartingTrack
-			int countCarsPerTrainset = countTrainCars / tracks.Count;
-			int countTrainsetsWithExtraCar = countTrainCars % tracks.Count;
 			List<TrainCar> orderedTrainCars = new List<TrainCar>();
 			List<CarsPerTrack> carsPerStartingTrack = new List<CarsPerTrack>();
 			for (int i = 0; i < tracks.Count; i++)
 			{
 				int rangeStart = i * countCarsPerTrainset + Math.Min(i, countTrainsetsWithExtraCar);
 				int rangeCount = i < countTrainsetsWithExtraCar ? countCarsPerTrainset + 1 : countCarsPerTrainset;
+				Debug.Log(string.Format(
+					"Spawning cars with range ({0}-{1}) from List<TrainCarType>({2})...",
+					rangeStart,
+					rangeStart + rangeCount,
+					orderedTrainCarTypes.Count));
 				Track startingTrack = tracks[i];
 				RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
 				List<TrainCar> spawnedCars = CarSpawner.SpawnCarTypesOnTrack(
@@ -116,6 +126,12 @@ namespace PersistentJobsMod
 					0.0,
 					false,
 					true);
+				if (spawnedCars == null)
+				{
+					Debug.LogError("Failed to spawn some trainCars!");
+					SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(orderedTrainCars, true);
+					return null;
+				}
 				orderedTrainCars.AddRange(spawnedCars);
 				carsPerStartingTrack.Add(
 					new CarsPerTrack(startingTrack, (from car in spawnedCars select car.logicCar).ToList()));
@@ -293,9 +309,9 @@ namespace PersistentJobsMod
 				// TODO: to skip player spawned cars or to not?
 				if (tc != null)
 				{
-					if (trainCarsPerTrainSet[tc.trainset] == null)
+					if (!trainCarsPerTrainSet.ContainsKey(tc.trainset))
 					{
-						trainCarsPerTrainSet[tc.trainset] = new List<TrainCar>();
+						trainCarsPerTrainSet.Add(tc.trainset, new List<TrainCar>());
 					}
 					trainCarsPerTrainSet[tc.trainset].Add(tc);
 				}
@@ -333,9 +349,9 @@ namespace PersistentJobsMod
 					continue;
 				}
 				// the first station is the closest
-				if (cgsPerTcsPerSc[stationsByDistance[0]] == null)
+				if (!cgsPerTcsPerSc.ContainsKey(stationsByDistance[0]))
 				{
-					cgsPerTcsPerSc[stationsByDistance[0]] = new List<(List<TrainCar>, List<CargoGroup>)>();
+					cgsPerTcsPerSc.Add(stationsByDistance[0], new List<(List<TrainCar>, List<CargoGroup>)>());
 				}
 				cgsPerTcsPerSc[stationsByDistance[0]].Add((tcs, new List<CargoGroup>()));
 			}
