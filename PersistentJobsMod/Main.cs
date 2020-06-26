@@ -90,10 +90,14 @@ namespace PersistentJobsMod
             }
         }
 
+        // expires a job if none of its cars are in range of the starting station on job start attempt
         [HarmonyPatch(typeof(JobValidator), "ProcessJobOverview")]
         class JobValidator_ProcessJobOverview_Patch
         {
-            static void Prefix(List<StationController> ___allStations, DV.Printers.PrinterController ___bookletPrinter, JobOverview jobOverview)
+            static void Prefix(
+                List<StationController> ___allStations,
+                DV.Printers.PrinterController ___bookletPrinter,
+                JobOverview jobOverview)
             {
                 try
                 {
@@ -103,36 +107,53 @@ namespace PersistentJobsMod
                     }
 
                     Job job = jobOverview.job;
-                    StationController stationController = ___allStations.FirstOrDefault((StationController st) => st.logicStation.availableJobs.Contains(job));
+                    StationController stationController = ___allStations.FirstOrDefault(
+                        (StationController st) => st.logicStation.availableJobs.Contains(job)
+                    );
 
                     if (___bookletPrinter.IsOnCooldown || job.State != JobState.Available || stationController == null)
                     {
                         return;
                     }
 
-                    // expire the job if all associated cars are outside the job destruction range at time of job overview processing
+                    // expire the job if all associated cars are outside the job destruction range
                     // the base method's logic will handle generating the expired report
-                    StationJobGenerationRange stationRange = Traverse.Create(stationController).Field("stationRange").GetValue<StationJobGenerationRange>();
-                    Task taskWithCarsInRangeOfStation = job.tasks.FirstOrDefault((Task t) =>
-                    {
-                        List<Car> cars = Traverse.Create(t).Field("cars").GetValue<List<Car>>();
-                        Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
-                        {
-                            TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
-                            return trainCar != null && (trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude <= initialDistanceRegular;
-                        });
-                        return carInRangeOfStation != null;
-                    });
-                    if (taskWithCarsInRangeOfStation == null)
+                    StationJobGenerationRange stationRange = Traverse.Create(stationController)
+                        .Field("stationRange")
+                        .GetValue<StationJobGenerationRange>();
+                    if (!job.tasks.Any(CheckTaskForCarsInRange(stationRange)))
                     {
                         job.ExpireJob();
                     }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError(string.Format("Exception thrown during JobValidator.ProcessJobOverview prefix patch:\n{0}", e.Message));
+                    thisModEntry.Logger.Error(string.Format(
+                        "Exception thrown during JobValidator.ProcessJobOverview prefix patch:\n{0}",
+                        e.ToString()
+                    ));
                     OnCriticalFailure();
                 }
+            }
+
+            private static Func<Task, bool> CheckTaskForCarsInRange(StationJobGenerationRange stationRange)
+            {
+                return (Task t) =>
+                {
+                    if (t is ParallelTasks || t is SequentialTasks)
+                    {
+                        return Traverse.Create(t).Field("tasks").GetValue<IEnumerable<Task>>().Any(CheckTaskForCarsInRange(stationRange));
+                    }
+                    List<Car> cars = Traverse.Create(t).Field("cars").GetValue<List<Car>>();
+                    Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
+                    {
+                        TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
+                        float distance =
+                            (trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
+                        return trainCar != null && distance <= initialDistanceRegular;
+                    });
+                    return carInRangeOfStation != null;
+                };
             }
         }
     }
