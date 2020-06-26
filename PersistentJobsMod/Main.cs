@@ -419,6 +419,11 @@ namespace PersistentJobsMod
 								___stationController,
 								forceFulfilledLicenseRequirements,
 								new System.Random(Environment.TickCount));
+							if (__result != null)
+							{
+								Debug.Log("[PersistentJobs] finalize in shunting unload");
+								__result.FinalizeSetupAndGenerateFirstJob();
+							}
 							return false;
 						}
 						Debug.LogWarning(string.Format(
@@ -466,6 +471,11 @@ namespace PersistentJobsMod
 								___stationController,
 								forceFulfilledLicenseRequirements,
 								new System.Random(Environment.TickCount));
+							if (__result != null)
+							{
+								Debug.Log("[PersistentJobs] finalize out shunting load");
+								__result.FinalizeSetupAndGenerateFirstJob();
+							}
 							return false;
 						}
 						else if (startingJobType == JobType.Transport)
@@ -475,6 +485,11 @@ namespace PersistentJobsMod
 								___stationController,
 								forceFulfilledLicenseRequirements,
 								new System.Random(Environment.TickCount));
+							if (__result != null)
+							{
+								Debug.Log("[PersistentJobs] finalize out transport");
+								__result.FinalizeSetupAndGenerateFirstJob();
+							}
 							return false;
 						}
 						Debug.LogWarning(string.Format(

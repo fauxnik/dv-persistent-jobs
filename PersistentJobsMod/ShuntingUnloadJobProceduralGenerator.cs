@@ -79,7 +79,18 @@ namespace PersistentJobsMod
 			// spawn trainCars
 			Debug.Log("[PersistentJobs] unload: spawning trainCars");
 			RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
-			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(orderedTrainCarTypes, railTrack, true, 0.0, false, true);
+			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(
+				orderedTrainCarTypes,
+				railTrack,
+				true,
+				0.0,
+				false,
+				true);
+			if (orderedTrainCars == null)
+			{
+				Debug.LogWarning("[PersistentJobs] unload: Failed to spawn trainCars!");
+				return null;
+			}
 
 			JobChainControllerWithEmptyHaulGeneration jcc = GenerateShuntingUnloadJobWithExistingCars(
 				startingStation,
@@ -112,9 +123,9 @@ namespace PersistentJobsMod
 			Debug.Log("[PersistentJobs] unload: generating with pre-spawned cars");
 			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
 			HashSet<CargoContainerType> carContainerTypes = new HashSet<CargoContainerType>();
-			for (int i = 0; i < trainCars.Count; i++)
+			foreach (TrainCar trainCar in trainCars)
 			{
-				carContainerTypes.Add(CargoTypes.CarTypeToContainerType[trainCars[i].carType]);
+				carContainerTypes.Add(CargoTypes.CarTypeToContainerType[trainCar.carType]);
 			}
 			float approxTrainLength = yto.GetTotalTrainCarsLength(trainCars)
 				+ yto.GetSeparationLengthBetweenCars(trainCars.Count);

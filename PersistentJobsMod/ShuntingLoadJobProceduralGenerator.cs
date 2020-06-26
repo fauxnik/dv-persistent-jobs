@@ -134,7 +134,7 @@ namespace PersistentJobsMod
 					true);
 				if (spawnedCars == null)
 				{
-					Debug.LogError("[PersistentJobs] load: Failed to spawn some trainCars!");
+					Debug.LogWarning("[PersistentJobs] load: Failed to spawn some trainCars!");
 					SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(orderedTrainCars, true);
 					return null;
 				}
@@ -174,9 +174,9 @@ namespace PersistentJobsMod
 			Debug.Log("[PersistentJobs] load: generating with pre-spawned cars");
 			YardTracksOrganizer yto = YardTracksOrganizer.Instance;
 			HashSet<CargoContainerType> carContainerTypes = new HashSet<CargoContainerType>();
-			for (int i = 0; i < trainCars.Count; i++)
+			foreach (TrainCar trainCar in trainCars)
 			{
-				carContainerTypes.Add(CargoTypes.CarTypeToContainerType[trainCars[i].carType]);
+				carContainerTypes.Add(CargoTypes.CarTypeToContainerType[trainCar.carType]);
 			}
 			float approxTrainLength = yto.GetTotalTrainCarsLength(trainCars)
 				+ yto.GetSeparationLengthBetweenCars(trainCars.Count);
