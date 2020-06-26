@@ -114,7 +114,8 @@ namespace PersistentJobsMod
 						.GetValue<Dictionary<CargoType, List<CargoContainerType>>>();
 				trainCarTypeToCargoTypes[trainCarType] = (
 					from ct in Enum.GetValues(typeof(CargoType)).Cast<CargoType>().ToList<CargoType>()
-					where cargoTypeToSupportedContainerTypes[ct].Contains(containerType)
+					where cargoTypeToSupportedContainerTypes.ContainsKey(ct) &&
+						cargoTypeToSupportedContainerTypes[ct].Contains(containerType)
 					select ct
 				).ToList();
 			}

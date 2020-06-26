@@ -8,6 +8,7 @@ using UnityEngine;
 using UnityModManagerNet;
 using DV;
 using DV.Logic.Job;
+using DV.ServicePenalty;
 
 namespace PersistentJobsMod
 {
@@ -558,7 +559,14 @@ namespace PersistentJobsMod
 				try
 				{
 					StaticJobDefinition lastJobDef = ___jobChain[___jobChain.Count - 1];
-					if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingUnload)
+					if (lastJobDef.job != lastJobInChain)
+					{
+						Debug.LogError(string.Format(
+							"[PersistentJobs] lastJobInChain ({0}) does not match lastJobDef.job ({1})",
+							lastJobInChain.ID,
+							lastJobDef.job.ID));
+					}
+					else if (lastJobInChain.jobType == JobType.ShuntingUnload)
 					{
 						Debug.Log("[PersistentJobs] checking static definition type");
 						StaticShuntingUnloadJobDefinition unloadJobDef = lastJobDef as StaticShuntingUnloadJobDefinition;
@@ -569,20 +577,33 @@ namespace PersistentJobsMod
 							List<CargoGroup> availableCargoGroups = station.proceduralJobsRuleset.outputCargoGroups;
 
 							Debug.Log("[PersistentJobs] diverting trainCars");
+							int countCarsDiverted = 0;
 							// if a trainCar set can be reused at the current station, keep them there
-							foreach (CarsPerTrack cpt in unloadJobDef.carsPerDestinationTrack)
+							for (int i = unloadJobDef.carsPerDestinationTrack.Count - 1; i >= 0; i--)
 							{
+								CarsPerTrack cpt = unloadJobDef.carsPerDestinationTrack[i];
 								// check if there is any cargoGroup that satisfies all the cars
 								if (availableCargoGroups.Any(
 									cg => cpt.cars.All(
-										c => Utilities.GetCargoTypesForCarType(c.carType).Intersect(cg.cargoTypes).Any())))
+										c => Utilities.GetCargoTypesForCarType(c.carType)
+											.Intersect(cg.cargoTypes)
+											.Any())))
 								{
-									// removing the trainCars prevents generating an EmptyHaul job for them
-									// they will be candidates for new jobs after the player leaves the area
-									cpt.cars.ForEach(
-										c => __instance.trainCarsForJobChain.Remove(TrainCar.logicCarToTrainCar[c]));
+									// registering the cars as jobless prevents generating an EmptyHaul job for them
+									// they will be candidates for new jobs once the player leaves the area
+									List<TrainCar> tcsToDivert = new List<TrainCar>();
+									foreach(Car c in cpt.cars)
+									{
+										tcsToDivert.Add(TrainCar.logicCarToTrainCar[c]);
+										//__instance.trainCarsForJobChain.Remove(tcsToDivert[tcsToDivert.Count - 1]);
+										tcsToDivert[tcsToDivert.Count - 1].UpdateJobIdOnCarPlates(string.Empty);
+									}
+									JobDebtController.RegisterJoblessCars(tcsToDivert);
+									countCarsDiverted += tcsToDivert.Count;
+									unloadJobDef.carsPerDestinationTrack.Remove(cpt);
 								}
 							}
+							Debug.Log(string.Format("[PersistentJobs] diverted {0} trainCars", countCarsDiverted));
 						}
 						else
 						{
@@ -590,7 +611,7 @@ namespace PersistentJobsMod
 								"StaticShuntingUnloadJobDefinition. EmptyHaul jobs won't be generated.");
 						}
 					}
-					else if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
+					else if (lastJobInChain.jobType == JobType.ShuntingLoad)
 					{
 						StaticShuntingLoadJobDefinition loadJobDef = lastJobDef as StaticShuntingLoadJobDefinition;
 						if (loadJobDef != null)
@@ -633,7 +654,7 @@ namespace PersistentJobsMod
 							);
 						}
 					}
-					if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
+					else if (lastJobInChain.jobType == JobType.Transport)
 					{
 						StaticTransportJobDefinition loadJobDef = lastJobDef as StaticTransportJobDefinition;
 						if (loadJobDef != null)
@@ -678,9 +699,10 @@ namespace PersistentJobsMod
 					else
 					{
 						Debug.LogError(string.Format(
-							"[PersistentJobs] Unexpected job chain format: {0}. The last job in chain must be " +
+							"[PersistentJobs] Unexpected job type: {0}. The last job in chain must be " +
 							"ShuntingLoad, Transport, or ShuntingUnload for JobChainControllerWithEmptyHaulGeneration patch! " +
-							"New jobs won't be generated."));
+							"New jobs won't be generated.",
+							lastJobInChain.jobType));
 					}
 				}
 				catch (Exception e)
@@ -888,7 +910,7 @@ namespace PersistentJobsMod
 					}
 					Debug.Log(string.Format(
 						"[PersistentJobs] found {0} cars marked for deletion (coroutine)",
-						trainCarsToDelete.Count));
+						trainCarCandidatesForDelete.Count));
 					if (trainCarCandidatesForDelete.Count == 0)
 					{
 						continue;
