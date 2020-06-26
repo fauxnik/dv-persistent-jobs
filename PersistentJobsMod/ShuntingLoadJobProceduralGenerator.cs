@@ -365,13 +365,13 @@ namespace PersistentJobsMod
 					Vector3 trainPosition = tcs[0].gameObject.transform.position;
 					Vector3 stationPosition = sc.gameObject.transform.position;
 					float distance = (trainPosition - stationPosition).sqrMagnitude;
-					Debug.Log(string.Format(
+					/*Debug.Log(string.Format(
 						"[PersistentJobs] station grouping: train position {0}, station position {1}, " +
 						"distance {2:F}, threshold {3:F}",
 						trainPosition,
 						stationPosition,
 						distance,
-						abandonmentThreshold));
+						abandonmentThreshold));*/
 					// only create jobs for trainCars within a reasonable range of a station
 					if (distance < abandonmentThreshold)
 					{
