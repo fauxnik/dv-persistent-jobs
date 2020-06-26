@@ -5,5 +5,5 @@
 	"Version": "1.0.1",
 	"AssemblyName": "PersistentJobsMod.dll",
 	"EntryMethod": "PersistentJobsMod.Main.Load",
-	"Repository": "https://github.com/fauxnik/DerailValleyPersistentJobsMod"
+	"Repository": "https://raw.githubusercontent.com/fauxnik/DerailValleyPersistentJobsMod/master/Repository.json"
 }
