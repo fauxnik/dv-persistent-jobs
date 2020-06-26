@@ -566,11 +566,114 @@ namespace PersistentJobsMod
 								}
 							}
 						}
+						else
+						{
+							Debug.LogError("Couldn't convert lastJobDef to StaticShuntingUnloadJobDefinition. " +
+								"EmptyHaul jobs won't be generated.");
+						}
+					}
+					else if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
+					{
+						StaticShuntingLoadJobDefinition loadJobDef = lastJobDef as StaticShuntingLoadJobDefinition;
+						if (loadJobDef != null)
+						{
+							StationController startingStation = SingletonBehaviour<LogicController>.Instance
+								.YardIdToStationController[loadJobDef.logicStation.ID];
+							StationController destStation = SingletonBehaviour<LogicController>.Instance
+								.YardIdToStationController[loadJobDef.chainData.chainDestinationYardId];
+							Track startingTrack = loadJobDef.destinationTrack;
+							List<TrainCar> trainCars = __instance.trainCarsForJobChain;
+							System.Random rng = new System.Random(Environment.TickCount);
+							JobChainController jobChainController
+								= TransportJobProceduralGenerator.GenerateTransportJobWithExistingCars(
+									startingStation,
+									startingTrack,
+									destStation,
+									trainCars,
+									trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar).ToList(),
+									trainCars.Select<TrainCar, float>(tc => tc.logicCar.LoadedCargoAmount).ToList(),
+									rng
+								);
+							if (jobChainController != null)
+							{
+								foreach (TrainCar tc in jobChainController.trainCarsForJobChain)
+								{
+									__instance.trainCarsForJobChain.Remove(tc);
+								}
+								jobChainController.FinalizeSetupAndGenerateFirstJob();
+								Debug.Log(string.Format(
+									"Generated job chain (via patch) [{0}]: {1}",
+									jobChainController.jobChainGO.name,
+									jobChainController.jobChainGO));
+							}
+						}
+						else
+						{
+							Debug.LogError(
+								"Couldn't convert lastJobDef to StaticShuntingLoadDefinition." +
+								" Transport jobs won't be generated."
+							);
+						}
+					}
+					if (lastJobDef.job == lastJobInChain && lastJobInChain.jobType == JobType.ShuntingLoad)
+					{
+						StaticTransportJobDefinition loadJobDef = lastJobDef as StaticTransportJobDefinition;
+						if (loadJobDef != null)
+						{
+							StationController startingStation = SingletonBehaviour<LogicController>.Instance
+								.YardIdToStationController[loadJobDef.logicStation.ID];
+							StationController destStation = SingletonBehaviour<LogicController>.Instance
+								.YardIdToStationController[loadJobDef.chainData.chainDestinationYardId];
+							Track startingTrack = loadJobDef.destinationTrack;
+							List<TrainCar> trainCars = __instance.trainCarsForJobChain;
+							System.Random rng = new System.Random(Environment.TickCount);
+							JobChainController jobChainController
+								= ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithExistingCars(
+									startingStation,
+									startingTrack,
+									destStation,
+									trainCars,
+									trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar).ToList(),
+									rng
+								);
+							if (jobChainController != null)
+							{
+								foreach (TrainCar tc in jobChainController.trainCarsForJobChain)
+								{
+									__instance.trainCarsForJobChain.Remove(tc);
+								}
+								jobChainController.FinalizeSetupAndGenerateFirstJob();
+								Debug.Log(string.Format(
+									"Generated job chain (via patch) [{0}]: {1}",
+									jobChainController.jobChainGO.name,
+									jobChainController.jobChainGO));
+							}
+						}
+						else
+						{
+							Debug.LogError(
+								"Couldn't convert lastJobDef to StaticTransportDefinition." +
+								" ShuntingUnload jobs won't be generated."
+							);
+						}
+					}
+					else
+					{
+						Debug.LogError(string.Format(
+							"Unexpected job chain format: {0}. The last job in chain must be ShuntingLoad, " +
+							"Transport, or ShuntingUnload for JobChainControllerWithEmptyHaulGeneration patch! " +
+							"New jobs won't be generated."));
 					}
 				}
 				catch (Exception e)
 				{
-					// TODO: log & handle exception
+					thisModEntry.Logger.Error(string.Format(
+							"Exception thrown during {0}.{1} {2} patch:\n{3}",
+							"JobChainControllerWithEmptyHaulGeneration",
+							"OnLastJobInChainCompleted",
+							"prefix",
+							e.ToString()));
+					OnCriticalFailure();
 				}
 			}
 		}
@@ -643,16 +746,16 @@ namespace PersistentJobsMod
 
 						// try to generate jobs
 						thisModEntry.Logger.Log("generating jobs");
-						IEnumerable<(List<TrainCar>, JobChainController)> trainCarListJobChainControllerPairs
+						IEnumerable<JobChainController> jobChainControllers
 							= ShuntingLoadJobProceduralGenerator.doJobGeneration(jobInfos, rng);
 
 						// preserve trainCars for which a new job was generated
 						thisModEntry.Logger.Log("preserving cars");
-						foreach ((List<TrainCar> trainCars, JobChainController jcc) in trainCarListJobChainControllerPairs)
+						foreach (JobChainController jcc in jobChainControllers)
 						{
 							if (jcc != null)
 							{
-								trainCars.ForEach(tc => trainCarsToDelete.Remove(tc));
+								jcc.trainCarsForJobChain.ForEach(tc => trainCarsToDelete.Remove(tc));
 							}
 						}
 						// ------ END JOB GENERATION ------
@@ -850,10 +953,10 @@ namespace PersistentJobsMod
 
 				// try to generate jobs
 				thisModEntry.Logger.Log("generating jobs (coroutine)");
-				IEnumerable<(List<TrainCar>, JobChainController)> trainCarListJobChainControllerPairs = null;
+				IEnumerable<JobChainController> jobChainControllers = null;
 				try
 				{
-					trainCarListJobChainControllerPairs
+					jobChainControllers
 						= ShuntingLoadJobProceduralGenerator.doJobGeneration(jobInfos, rng);
 				}
 				catch (Exception e)
@@ -871,11 +974,11 @@ namespace PersistentJobsMod
 				thisModEntry.Logger.Log("preserving cars (coroutine)");
 				try
 				{
-					foreach ((List<TrainCar> trainCars, JobChainController jcc) in trainCarListJobChainControllerPairs)
+					foreach (JobChainController jcc in jobChainControllers)
 					{
 						if (jcc != null)
 						{
-							trainCars.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
+							jcc.trainCarsForJobChain.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
 						}
 					}
 				}

@@ -9,7 +9,7 @@ namespace PersistentJobsMod
 {
 	class TransportJobProceduralGenerator
 	{
-		public static JobChainControllerWithShuntingUnloadGeneration GenerateTransportJobWithCarSpawning(
+		public static JobChainControllerWithEmptyHaulGeneration GenerateTransportJobWithCarSpawning(
 			StationController startingStation,
 			bool forceLicenseReqs,
 			System.Random rng)
@@ -85,9 +85,15 @@ namespace PersistentJobsMod
 
 			// spawn trainCars
 			RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
-			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(orderedTrainCarTypes, railTrack, true, 0.0, false, true);
+			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(
+				orderedTrainCarTypes,
+				railTrack,
+				true,
+				0.0,
+				false,
+				true);
 
-			JobChainControllerWithShuntingUnloadGeneration jcc = GenerateTransportJobWithExistingCars(
+			JobChainControllerWithEmptyHaulGeneration jcc = GenerateTransportJobWithExistingCars(
 				startingStation,
 				startingTrack,
 				destStation,
@@ -107,7 +113,7 @@ namespace PersistentJobsMod
 			return jcc;
 		}
 
-		public static JobChainControllerWithShuntingUnloadGeneration GenerateTransportJobWithExistingCars(
+		public static JobChainControllerWithEmptyHaulGeneration GenerateTransportJobWithExistingCars(
 			StationController startingStation,
 			Track startingTrack,
 			StationController destStation,
@@ -175,7 +181,7 @@ namespace PersistentJobsMod
 			);
 		}
 
-		private static JobChainControllerWithShuntingUnloadGeneration GenerateTransportChainController(
+		private static JobChainControllerWithEmptyHaulGeneration GenerateTransportChainController(
 			StationController startingStation,
 			Track startingTrack,
 			StationController destStation,
@@ -195,8 +201,8 @@ namespace PersistentJobsMod
 				destStation.logicStation.ID
 			));
 			gameObject.transform.SetParent(startingStation.transform);
-			JobChainControllerWithShuntingUnloadGeneration jobChainController
-				= new JobChainControllerWithShuntingUnloadGeneration(gameObject);
+			JobChainControllerWithEmptyHaulGeneration jobChainController
+				= new JobChainControllerWithEmptyHaulGeneration(gameObject);
 			StationsChainData chainData = new StationsChainData(
 				startingStation.stationInfo.YardID,
 				destStation.stationInfo.YardID

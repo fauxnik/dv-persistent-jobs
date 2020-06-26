@@ -9,7 +9,7 @@ namespace PersistentJobsMod
 {
 	class ShuntingLoadJobProceduralGenerator
 	{
-		public static JobChainControllerWithTransportGeneration GenerateShuntingLoadJobWithCarSpawning(
+		public static JobChainControllerWithEmptyHaulGeneration GenerateShuntingLoadJobWithCarSpawning(
 			StationController startingStation,
 			bool forceLicenseReqs,
 			System.Random rng)
@@ -137,7 +137,7 @@ namespace PersistentJobsMod
 					new CarsPerTrack(startingTrack, (from car in spawnedCars select car.logicCar).ToList()));
 			}
 
-			JobChainControllerWithTransportGeneration jcc = GenerateShuntingLoadJobWithExistingCars(
+			JobChainControllerWithEmptyHaulGeneration jcc = GenerateShuntingLoadJobWithExistingCars(
 				startingStation,
 				carsPerStartingTrack,
 				destStation,
@@ -156,7 +156,7 @@ namespace PersistentJobsMod
 			return jcc;
 		}
 
-		public static JobChainControllerWithTransportGeneration GenerateShuntingLoadJobWithExistingCars(
+		public static JobChainControllerWithEmptyHaulGeneration GenerateShuntingLoadJobWithExistingCars(
 			StationController startingStation,
 			List<CarsPerTrack> carsPerStartingTrack,
 			StationController destStation,
@@ -239,7 +239,7 @@ namespace PersistentJobsMod
 			);
 		}
 
-		private static JobChainControllerWithTransportGeneration GenerateShuntingLoadChainController(
+		private static JobChainControllerWithEmptyHaulGeneration GenerateShuntingLoadChainController(
 			StationController startingStation,
 			List<CarsPerTrack> carsPerStartingTrack,
 			WarehouseMachine loadMachine,
@@ -260,8 +260,8 @@ namespace PersistentJobsMod
 				destStation.logicStation.ID
 			));
 			gameObject.transform.SetParent(startingStation.transform);
-			JobChainControllerWithTransportGeneration jobChainController
-				= new JobChainControllerWithTransportGeneration(gameObject);
+			JobChainControllerWithEmptyHaulGeneration jobChainController
+				= new JobChainControllerWithEmptyHaulGeneration(gameObject);
 			StationsChainData chainData = new StationsChainData(
 				startingStation.stationInfo.YardID,
 				destStation.stationInfo.YardID
@@ -495,7 +495,7 @@ namespace PersistentJobsMod
 			return jobsToGenerate;
 		}
 
-		public static IEnumerable<(List<TrainCar>, JobChainController)> doJobGeneration(
+		public static IEnumerable<JobChainController> doJobGeneration(
 			List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)> jobInfos,
 			System.Random rng,
 			bool forceCorrectCargoStateOnCars = true)
@@ -506,7 +506,7 @@ namespace PersistentJobsMod
 				(StationController ss, List<CarsPerTrack> cpst, StationController ds, _, _) = definition;
 				(_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
 
-				return (tcs, (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng, forceCorrectCargoStateOnCars));
+				return (JobChainController)GenerateShuntingLoadJobWithExistingCars(ss, cpst, ds, tcs, cts, rng, forceCorrectCargoStateOnCars);
 			});
 		}
 	}

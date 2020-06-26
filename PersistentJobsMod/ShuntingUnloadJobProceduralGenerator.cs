@@ -9,7 +9,7 @@ namespace PersistentJobsMod
 {
 	class ShuntingUnloadJobProceduralGenerator
 	{
-		public static JobChainController GenerateShuntingUnloadJobWithCarSpawning(
+		public static JobChainControllerWithEmptyHaulGeneration GenerateShuntingUnloadJobWithCarSpawning(
 			StationController destinationStation,
 			bool forceLicenseReqs,
 			System.Random rng)
@@ -75,7 +75,7 @@ namespace PersistentJobsMod
 			RailTrack railTrack = SingletonBehaviour<LogicController>.Instance.LogicToRailTrack[startingTrack];
 			List<TrainCar> orderedTrainCars = CarSpawner.SpawnCarTypesOnTrack(orderedTrainCarTypes, railTrack, true, 0.0, false, true);
 
-			JobChainController jcc = GenerateShuntingUnloadJobWithExistingCars(
+			JobChainControllerWithEmptyHaulGeneration jcc = GenerateShuntingUnloadJobWithExistingCars(
 				startingStation,
 				startingTrack,
 				destinationStation,
@@ -94,7 +94,7 @@ namespace PersistentJobsMod
 			return jcc;
 		}
 
-		public static JobChainController GenerateShuntingUnloadJobWithExistingCars(
+		public static JobChainControllerWithEmptyHaulGeneration GenerateShuntingUnloadJobWithExistingCars(
 			StationController startingStation,
 			Track startingTrack,
 			StationController destStation,
@@ -198,7 +198,7 @@ namespace PersistentJobsMod
 				requiredLicenses);
 		}
 
-		private static JobChainController GenerateShuntingUnloadChainController(
+		private static JobChainControllerWithEmptyHaulGeneration GenerateShuntingUnloadChainController(
 			StationController startingStation,
 			Track startingTrack,
 			WarehouseMachine unloadMachine,
@@ -219,8 +219,8 @@ namespace PersistentJobsMod
 				destStation.logicStation.ID
 			));
 			gameObject.transform.SetParent(startingStation.transform);
-			JobChainController jobChainController
-				= new JobChainController(gameObject);
+			JobChainControllerWithEmptyHaulGeneration jobChainController
+				= new JobChainControllerWithEmptyHaulGeneration(gameObject);
 			StationsChainData chainData = new StationsChainData(
 				startingStation.stationInfo.YardID,
 				destStation.stationInfo.YardID);
