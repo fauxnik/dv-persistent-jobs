@@ -180,19 +180,7 @@ namespace PersistentJobsMod
 					StationJobGenerationRange stationRange = Traverse.Create(stationController)
 						.Field("stationRange")
 						.GetValue<StationJobGenerationRange>();
-					Task taskWithCarsInRangeOfStation = job.tasks.FirstOrDefault((Task t) =>
-					{
-						List<Car> cars = Traverse.Create(t).Field("cars").GetValue<List<Car>>();
-						Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
-						{
-							TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
-							float distance =
-								(trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
-							return trainCar != null && distance <= initialDistanceRegular;
-						});
-						return carInRangeOfStation != null;
-					});
-					if (taskWithCarsInRangeOfStation == null)
+					if (!job.tasks.Any(CheckTaskForCarsInRange(stationRange)))
 					{
 						job.ExpireJob();
 					}
@@ -206,7 +194,27 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 			}
-		}
+
+			private static Func<Task, bool> CheckTaskForCarsInRange(StationJobGenerationRange stationRange)
+			{
+				return (Task t) =>
+				{
+					if (t is ParallelTasks || t is SequentialTasks)
+					{
+						return Traverse.Create(t).Field("tasks").GetValue<IEnumerable<Task>>().Any(CheckTaskForCarsInRange(stationRange));
+					}
+					List<Car> cars = Traverse.Create(t).Field("cars").GetValue<List<Car>>();
+					Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
+					{
+						TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
+						float distance =
+							(trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
+						return trainCar != null && distance <= initialDistanceRegular;
+					});
+					return carInRangeOfStation != null;
+				};
+			}
+}
 
 		// simply copied from the patched method
 		// may help keep mod stable across game updates
