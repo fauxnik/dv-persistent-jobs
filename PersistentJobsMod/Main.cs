@@ -4,11 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Harmony12;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityModManagerNet;
 using DV;
 using DV.Logic.Job;
 using DV.ServicePenalty;
+using DV.JObjectExtstensions;
 
 namespace PersistentJobsMod
 {
@@ -18,6 +20,9 @@ namespace PersistentJobsMod
 		private static bool isModBroken = false;
 		private static float initialDistanceRegular = 0f;
 		private static float initialDistanceAnyJobTaken = 0f;
+		private static List<string> stationIdSpawnBlockList = new List<string>();
+		private static readonly string SAVE_DATA_PRIMARY_KEY = "Mod_Persistent_Jobs";
+		private static readonly string SAVE_DATA_SPAWN_BLOCK_KEY = "spawn_block";
 #if DEBUG
 		private static float PERIOD = 60f;
 #else
@@ -95,6 +100,64 @@ namespace PersistentJobsMod
 				"type likely indicates an incompatibility between the mod and a recent game update. Please search the " +
 				"mod's Github issue tracker for a relevant report. If none is found, please open one. Include the " +
 				"exception message printed above and your game's current build number.");
+		}
+
+		[HarmonyPatch(typeof(SaveGameManager), "Save")]
+		class SaveGameManager_Save_Patch
+		{
+			static void Prefix(SaveGameManager __instance)
+			{
+				try
+				{
+					JArray spawnBlockSaveData = new JArray(from id in stationIdSpawnBlockList select new JValue(id));
+
+					JObject saveData = new JObject(
+						new JProperty(SAVE_DATA_SPAWN_BLOCK_KEY, spawnBlockSaveData));
+
+					SaveGameManager.data.SetJObject(SAVE_DATA_PRIMARY_KEY, saveData);
+				}
+				catch (Exception e)
+				{
+					// TODO: what to do if saving fails?
+					thisModEntry.Logger.Warning(string.Format("Saving mod data failed with exception:\n{0}", e));
+				}
+			}
+		}
+
+		[HarmonyPatch(typeof(SaveGameManager), "Load")]
+		class SaveGameManager_Load_Patch
+		{
+			static void Postfix(SaveGameManager __instance)
+			{
+				try
+				{
+					JObject saveData = SaveGameManager.data.GetJObject(SAVE_DATA_PRIMARY_KEY);
+
+					if (saveData == null)
+					{
+						thisModEntry.Logger.Log("Not loading save data: primary object was null.");
+						return;
+					}
+
+					JArray spawnBlockSaveData = (JArray)saveData[SAVE_DATA_SPAWN_BLOCK_KEY];
+
+					if (spawnBlockSaveData == null)
+					{
+						thisModEntry.Logger.Log("Not loading spawn block list: data was null.");
+						return;
+					}
+
+					stationIdSpawnBlockList = spawnBlockSaveData.Select(id => (string)id).ToList();
+					thisModEntry.Logger.Log(
+						string.Format("Loaded station spawn block list: [ {0} ]",
+						string.Join(", ", stationIdSpawnBlockList)));
+				}
+				catch (Exception e)
+				{
+					// TODO: what to do if loading fails?
+					thisModEntry.Logger.Warning(string.Format("Loading mod data failed with exception:\n{0}", e));
+				}
+			}
 		}
 
 		// prevents jobs from expiring due to the player's distance from the station
@@ -221,6 +284,28 @@ namespace PersistentJobsMod
 					});
 					return carInRangeOfStation != null;
 				};
+			}
+		}
+
+		[HarmonyPatch(typeof(StationProceduralJobsController), "TryToGenerateJobs")]
+		class StationProceduralJobsController_TryToGenerateJobs_Patch
+		{
+			static bool Prefix(StationProceduralJobsController __instance)
+			{
+				if (thisModEntry.Active)
+				{
+					return !stationIdSpawnBlockList.Contains(__instance.stationController.logicStation.ID);
+				}
+				return true;
+			}
+
+			static void Postfix(StationProceduralJobsController __instance)
+			{
+				string stationId = __instance.stationController.logicStation.ID;
+				if (!stationIdSpawnBlockList.Contains(stationId))
+				{
+					stationIdSpawnBlockList.Add(stationId);
+				}
 			}
 		}
 
