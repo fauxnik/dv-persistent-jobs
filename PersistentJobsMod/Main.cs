@@ -637,9 +637,7 @@ namespace PersistentJobsMod
 								.GetValue<bool>(trainCar);
 							if (areDeleteConditionsFulfilled)
 							{
-								___unusedTrainCarsMarkedForDelete.RemoveAt(i);
 								trainCarsToDelete.Add(trainCar);
-								___carVisitCheckersMap.Remove(trainCar);
 							}
 						}
 						Debug.Log(string.Format(
@@ -689,8 +687,8 @@ namespace PersistentJobsMod
 							"[PersistentJobs] generated {0} jobs",
 							jobChainControllers.Where(jcc => jcc != null).Count()));
 
-						// preserve trainCars for which a new job was generated
-						Debug.Log("[PersistentJobs] preserving cars");
+						// finalize jobs & preserve job train cars
+						Debug.Log("[PersistentJobs] finalizing jobs");
 						int totalCarsPreserved = 0;
 						foreach (JobChainController jcc in jobChainControllers)
 						{
@@ -701,9 +699,25 @@ namespace PersistentJobsMod
 								jcc.FinalizeSetupAndGenerateFirstJob();
 							}
 						}
+
+						// preserve all trainCars that are not locos
+						Debug.Log("[PersistentJobs] preserving cars");
+						foreach (TrainCar tc in new List<TrainCar>(trainCarsToDelete))
+						{
+							if (!tc.IsLoco)
+							{
+								trainCarsToDelete.Remove(tc);
+								totalCarsPreserved += 1;
+							}
+						}
 						Debug.Log(string.Format("[PersistentJobs] preserved {0} cars", totalCarsPreserved));
 						// ------ END JOB GENERATION ------
 
+						foreach (TrainCar tc in trainCarsToDelete)
+						{
+							___unusedTrainCarsMarkedForDelete.Remove(tc);
+							___carVisitCheckersMap.Remove(tc);
+						}
 						SingletonBehaviour<CarSpawner>.Instance.DeleteTrainCars(trainCarsToDelete, true);
 						Debug.Log(string.Format("[PersistentJobs] deleted {0} cars", trainCarsToDelete.Count));
 						return false;
@@ -930,8 +944,8 @@ namespace PersistentJobsMod
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
-				// preserve trainCars for which a new job was generated
-				Debug.Log("[PersistentJobs] preserving cars (coroutine)");
+				// finalize jobs & preserve job train cars
+				Debug.Log("[PersistentJobs] finalizing jobs (coroutine)");
 				int totalCarsPreserved = 0;
 				try
 				{
@@ -942,6 +956,31 @@ namespace PersistentJobsMod
 							jcc.trainCarsForJobChain.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
 							totalCarsPreserved += jcc.trainCarsForJobChain.Count;
 							jcc.FinalizeSetupAndGenerateFirstJob();
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					thisModEntry.Logger.Error(string.Format(
+						"Exception thrown during TrainCarsCreateJobOrDeleteCheck trainCar preservation:\n{0}",
+						e.ToString()
+					));
+					OnCriticalFailure();
+				}
+
+				yield return WaitFor.SecondsRealtime(interopPeriod);
+
+				// preserve all trainCars that are not locomotives
+				Debug.Log("[PersistentJobs] preserving cars (coroutine)");
+				try
+				{
+					foreach (TrainCar tc in new List<TrainCar>(trainCarCandidatesForDelete))
+					{
+						if (!tc.IsLoco)
+						{
+							trainCarCandidatesForDelete.Remove(tc);
+							unusedTrainCarsMarkedForDelete.Add(tc);
+							totalCarsPreserved += 1;
 						}
 					}
 					Debug.Log(string.Format("[PersistentJobs] preserved {0} cars (coroutine)", totalCarsPreserved));
