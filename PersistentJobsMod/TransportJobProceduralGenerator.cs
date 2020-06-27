@@ -36,6 +36,11 @@ namespace PersistentJobsMod
 					   select cg).ToList();
 				countTrainCars = Math.Min(countTrainCars, LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses());
 			}
+			if (availableCargoGroups.Count == 0)
+			{
+				Debug.LogWarning("[PersistentJobs] transport: no available cargo groups");
+				return null;
+			}
 
 			CargoGroup chosenCargoGroup = Utilities.GetRandomFromEnumerable(availableCargoGroups, rng);
 

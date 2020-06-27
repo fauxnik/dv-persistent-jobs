@@ -36,6 +36,11 @@ namespace PersistentJobsMod
 					   select cg).ToList();
 				countTrainCars = Math.Min(countTrainCars, LicenseManager.GetMaxNumberOfCarsPerJobWithAcquiredJobLicenses());
 			}
+			if (availableCargoGroups.Count == 0)
+			{
+				Debug.LogWarning("[PersistentJobs] load: no available cargo groups");
+				return null;
+			}
 
 			CargoGroup chosenCargoGroup = Utilities.GetRandomFromEnumerable(availableCargoGroups, rng);
 
@@ -412,7 +417,7 @@ namespace PersistentJobsMod
 							"Unexpected CargoGroup data in PopulateCargoGroupsPerTrainCarSet! Proceding to overwrite."
 						);
 					}
-					List<CargoGroup> availableCargoGroups = new List<CargoGroup>();
+					//List<CargoGroup> availableCargoGroups = new List<CargoGroup>();
 					foreach (CargoGroup cg in sc.proceduralJobsRuleset.outputCargoGroups)
 					{
 						// ensure all trainCars will have at least one cargoType to haul
@@ -452,11 +457,11 @@ namespace PersistentJobsMod
 
 					for (; countTracks > 0 && triesLeft > 0; triesLeft--)
 					{
-						(List<TrainCar> trainCarsToAdd, List<CargoGroup> availableCargoGroups)
+						(List<TrainCar> trainCarsToAdd, List<CargoGroup> cargoGroupsForTrainCars)
 							= cgsPerTcs[cgsPerTcs.Count - 1];
 
 						List<CargoGroup> licensedCargoGroups
-							= (from cg in availableCargoGroups
+							= (from cg in cargoGroupsForTrainCars
 							   where LicenseManager.IsLicensedForJob(cg.CargoRequiredLicenses)
 							   select cg).ToList();
 
@@ -473,10 +478,10 @@ namespace PersistentJobsMod
 						else if ((isFulfillingLicenseReqs &&
 									(licensedCargoGroups.Count == 0 ||
 										(cargoGroupsToUse.Count() > 0 &&
-											cargoGroupsToUse.Intersect(licensedCargoGroups).Count() == 0) ||
+											!cargoGroupsToUse.Intersect(licensedCargoGroups).Any()) ||
 										trainCarsToLoad.Count + trainCarsToAdd.Count <= maxCarsLicensed)) ||
 								(cargoGroupsToUse.Count() > 0 &&
-									cargoGroupsToUse.Intersect(availableCargoGroups).Count() == 0))
+									!cargoGroupsToUse.Intersect(cargoGroupsForTrainCars).Any()))
 						{
 							// either trying to satisfy licenses, but these trainCars aren't compatible
 							//   or the cargoGroups for these trainCars aren't compatible
@@ -485,13 +490,13 @@ namespace PersistentJobsMod
 							cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
 							continue;
 						}
-						availableCargoGroups
-							= isFulfillingLicenseReqs ? licensedCargoGroups : availableCargoGroups;
+						cargoGroupsForTrainCars
+							= isFulfillingLicenseReqs ? licensedCargoGroups : cargoGroupsForTrainCars;
 
 						// if we've made it this far, we can add these trainCars to the job
 						cargoGroupsToUse = cargoGroupsToUse.Count() > 0
-							? cargoGroupsToUse.Intersect(availableCargoGroups)
-							: availableCargoGroups;
+							? cargoGroupsToUse.Intersect(cargoGroupsForTrainCars)
+							: cargoGroupsForTrainCars;
 						trainCarsToLoad.AddRange(trainCarsToAdd);
 						cgsPerTcs.RemoveAt(cgsPerTcs.Count - 1);
 						countTracks--;
@@ -530,10 +535,21 @@ namespace PersistentJobsMod
 						destStation,
 						trainCarsToLoad,
 						trainCarsToLoad.Select(
-							tc => Utilities.GetRandomFromEnumerable<CargoType>(
-								chosenCargoGroup.cargoTypes.Intersect(
-									Utilities.GetCargoTypesForCarType(tc.carType)),
-								rng)).ToList()));
+							tc =>
+							{
+								List<CargoType> intersection = chosenCargoGroup.cargoTypes.Intersect(
+										Utilities.GetCargoTypesForCarType(tc.carType)).ToList();
+								if (!intersection.Any())
+								{
+									Debug.LogError(string.Format("[PersistentJobs] Unexpected trainCar with no overlapping cargoType in cargoGroup!\n" +
+										"cargo types for train car: { {0} }\n" +
+										"cargo types for chosen cargo group: { {1} }",
+										String.Join(", ", Utilities.GetCargoTypesForCarType(tc.carType)),
+										String.Join(", ", chosenCargoGroup.cargoTypes)));
+									return CargoType.None;
+								}
+								return Utilities.GetRandomFromEnumerable<CargoType>(intersection, rng);
+							}).ToList()));
 				}
 			}
 
