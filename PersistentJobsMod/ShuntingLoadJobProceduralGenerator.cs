@@ -241,8 +241,8 @@ namespace PersistentJobsMod
 				out bonusTimeLimit,
 				out initialWage
 			);
-			JobLicenses requiredLicenses = LicenseManager.GetRequiredLicensesForJobType(JobType.Transport)
-				| LicenseManager.GetRequiredLicensesForCarContainerTypes(carContainerTypes)
+			JobLicenses requiredLicenses = LicenseManager.GetRequiredLicensesForJobType(JobType.ShuntingLoad)
+				| LicenseManager.GetRequiredLicensesForCargoTypes(transportedCargoPerCar)
 				| LicenseManager.GetRequiredLicenseForNumberOfTransportedCars(trainCars.Count);
 			return GenerateShuntingLoadChainController(
 				startingStation,

@@ -186,7 +186,7 @@ namespace PersistentJobsMod
 				out initialWage
 			);
 			JobLicenses requiredLicenses = LicenseManager.GetRequiredLicensesForJobType(JobType.Transport)
-				| LicenseManager.GetRequiredLicensesForCarContainerTypes(carContainerTypes)
+				| LicenseManager.GetRequiredLicensesForCargoTypes(transportedCargoPerCar)
 				| LicenseManager.GetRequiredLicenseForNumberOfTransportedCars(trainCars.Count);
 			return TransportJobProceduralGenerator.GenerateTransportChainController(
 				startingStation,
