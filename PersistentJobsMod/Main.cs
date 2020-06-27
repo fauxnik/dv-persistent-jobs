@@ -419,7 +419,7 @@ namespace PersistentJobsMod
 							StationController destStation = SingletonBehaviour<LogicController>.Instance
 								.YardIdToStationController[loadJobDef.chainData.chainDestinationYardId];
 							Track startingTrack = loadJobDef.destinationTrack;
-							List<TrainCar> trainCars = __instance.trainCarsForJobChain;
+							List<TrainCar> trainCars = new List<TrainCar>(__instance.trainCarsForJobChain);
 							System.Random rng = new System.Random(Environment.TickCount);
 							JobChainController jobChainController
 								= TransportJobProceduralGenerator.GenerateTransportJobWithExistingCars(
@@ -463,7 +463,7 @@ namespace PersistentJobsMod
 							StationController destStation = SingletonBehaviour<LogicController>.Instance
 								.YardIdToStationController[loadJobDef.chainData.chainDestinationYardId];
 							Track startingTrack = loadJobDef.destinationTrack;
-							List<TrainCar> trainCars = __instance.trainCarsForJobChain;
+							List<TrainCar> trainCars = new List<TrainCar>(__instance.trainCarsForJobChain);
 							System.Random rng = new System.Random(Environment.TickCount);
 							JobChainController jobChainController
 								= ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithExistingCars(
