@@ -206,7 +206,10 @@ namespace PersistentJobsMod
 				{
 					if (t is ParallelTasks || t is SequentialTasks)
 					{
-						return Traverse.Create(t).Field("tasks").GetValue<IEnumerable<Task>>().Any(CheckTaskForCarsInRange(stationRange));
+						return Traverse.Create(t)
+							.Field("tasks")
+							.GetValue<IEnumerable<Task>>()
+							.Any(CheckTaskForCarsInRange(stationRange));
 					}
 					List<Car> cars = Traverse.Create(t).Field("cars").GetValue<List<Car>>();
 					Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
@@ -219,7 +222,7 @@ namespace PersistentJobsMod
 					return carInRangeOfStation != null;
 				};
 			}
-}
+		}
 
 		// simply copied from the patched method
 		// may help keep mod stable across game updates
@@ -635,7 +638,8 @@ namespace PersistentJobsMod
 									startingTrack,
 									destStation,
 									trainCars,
-									trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar).ToList(),
+									trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar)
+										.ToList(),
 									trainCars.Select<TrainCar, float>(tc => tc.logicCar.LoadedCargoAmount).ToList(),
 									rng
 								);
@@ -678,7 +682,8 @@ namespace PersistentJobsMod
 									startingTrack,
 									destStation,
 									trainCars,
-									trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar).ToList(),
+									trainCars.Select<TrainCar, CargoType>(tc => tc.logicCar.CurrentCargoTypeInCar)
+										.ToList(),
 									rng
 								);
 							if (jobChainController != null)
