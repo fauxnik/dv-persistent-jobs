@@ -152,7 +152,13 @@ namespace PersistentJobsMod
 			WarehouseMachine loadMachine = Utilities.GetRandomFromEnumerable(supportedWMCs, rng).warehouseMachine;
 
 			// choose destination tracks
-			int countTracks = rng.Next(1, destinationStation.proceduralJobsRuleset.maxShuntingStorageTracks + 1);
+			int maxCountTracks = destinationStation.proceduralJobsRuleset.maxShuntingStorageTracks;
+			int countTracks = rng.Next(1, maxCountTracks + 1);
+			// bias toward less than max number of tracks for shorter trains
+			if (trainCars.Count < 2 * maxCountTracks)
+			{
+				countTracks = rng.Next(0, Mathf.FloorToInt(1.5f * maxCountTracks)) % maxCountTracks + 1;
+			}
 			Debug.Log(string.Format("[PersistentJobs] unload: choosing {0} destination tracks", countTracks));
 			List<Track> destinationTracks = new List<Track>();
 			do
