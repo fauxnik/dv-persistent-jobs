@@ -1059,22 +1059,24 @@ namespace PersistentJobsMod
 			{
 				if (thisModEntry.Active)
 				{
-					Debug.Log("[PersistentJobs] getting track with free space");
+					Debug.Log("[PersistentJobs] getting random track with free space");
 					try
 					{
 						__result = null;
-						SortedList<double, Track> tracksSortedByLength = new SortedList<double, Track>();
+						List<Track> tracksWithFreeSpace = new List<Track>();
 						foreach (Track track in tracks)
 						{
 							double freeSpaceOnTrack = __instance.GetFreeSpaceOnTrack(track);
 							if (freeSpaceOnTrack > (double)requiredLength)
 							{
-								tracksSortedByLength.Add(freeSpaceOnTrack, track);
+								tracksWithFreeSpace.Add(track);
 							}
 						}
-						if (tracksSortedByLength.Count > 0)
+						if (tracksWithFreeSpace.Count > 0)
 						{
-							__result = tracksSortedByLength.First().Value;
+							__result = Utilities.GetRandomFromEnumerable(
+								tracksWithFreeSpace,
+								new System.Random(Environment.TickCount));
 						}
 						return false;
 					}
@@ -1085,8 +1087,7 @@ namespace PersistentJobsMod
 							"YardTracksOrganizer",
 							"GetTrackThatHasEnoughFreeSpace",
 							"prefix",
-							e.ToString()
-						));
+							e.ToString()));
 					}
 				}
 				return true;
