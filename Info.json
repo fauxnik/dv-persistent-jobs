@@ -2,7 +2,7 @@
 	"Id": "PersistentJobs",
 	"DisplayName": "Persistent Jobs",
 	"Author": "fauxnik",
-	"Version": "1.0.1",
+	"Version": "2.0.0",
 	"AssemblyName": "PersistentJobsMod.dll",
 	"EntryMethod": "PersistentJobsMod.Main.Load",
 	"Repository": "https://raw.githubusercontent.com/fauxnik/DerailValleyPersistentJobsMod/master/Repository.json"
