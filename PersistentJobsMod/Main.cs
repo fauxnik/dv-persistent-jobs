@@ -21,8 +21,12 @@ namespace PersistentJobsMod
 		private static float initialDistanceRegular = 0f;
 		private static float initialDistanceAnyJobTaken = 0f;
 		private static List<string> stationIdSpawnBlockList = new List<string>();
+
+		private static readonly string VERSION = "2.0.0";
 		private static readonly string SAVE_DATA_PRIMARY_KEY = "Mod_Persistent_Jobs";
+		private static readonly string SAVE_DATA_VERSION_KEY = "version";
 		private static readonly string SAVE_DATA_SPAWN_BLOCK_KEY = "spawn_block";
+
 #if DEBUG
 		private static float PERIOD = 60f;
 #else
@@ -119,6 +123,7 @@ namespace PersistentJobsMod
 					JArray spawnBlockSaveData = new JArray(from id in stationIdSpawnBlockList select new JValue(id));
 
 					JObject saveData = new JObject(
+						new JProperty(SAVE_DATA_VERSION_KEY, new JValue(VERSION)),
 						new JProperty(SAVE_DATA_SPAWN_BLOCK_KEY, spawnBlockSaveData));
 
 					SaveGameManager.data.SetJObject(SAVE_DATA_PRIMARY_KEY, saveData);
