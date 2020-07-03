@@ -18,6 +18,7 @@ namespace PersistentJobsMod
 	{
 		private static UnityModManager.ModEntry thisModEntry;
 		private static bool isModBroken = false;
+		private static bool overrideTrackReservation = false;
 		private static float initialDistanceRegular = 0f;
 		private static float initialDistanceAnyJobTaken = 0f;
 		private static List<string> stationIdSpawnBlockList = new List<string>();
@@ -255,6 +256,34 @@ namespace PersistentJobsMod
 						return;
 					}
 
+					// reserve space for this job
+					StationProceduralJobsController[] stationJobControllers
+						= UnityEngine.Object.FindObjectsOfType<StationProceduralJobsController>();
+					JobChainController jobChainController = null;
+					for (int i = 0; i < stationJobControllers.Length && jobChainController == null; i++)
+					{
+						foreach (JobChainController jcc in stationJobControllers[i].GetCurrentJobChains())
+						{
+							if (jcc.currentJobInChain == jobOverview.job)
+							{
+								jobChainController = jcc;
+								break;
+							}
+						}
+					}
+					if (jobChainController == null)
+					{
+						Debug.LogWarning(string.Format(
+							"[PersistentJobs] could not find JobChainController for Job[{0}]",
+							jobOverview.job.ID));
+					}
+					else
+					{
+						overrideTrackReservation = true;
+						Traverse.Create(jobChainController).Method("ReserveRequiredTracks", new Type[] { }).GetValue();
+						overrideTrackReservation = false;
+					}
+
 					// expire the job if all associated cars are outside the job destruction range
 					// the base method's logic will handle generating the expired report
 					StationJobGenerationRange stationRange = Traverse.Create(stationController)
@@ -296,6 +325,20 @@ namespace PersistentJobsMod
 					});
 					return carInRangeOfStation != null;
 				};
+			}
+		}
+
+		[HarmonyPatch(typeof(JobChainController), "ReserveRequiredTracks")]
+		class JobChainController_ReserveRequiredTracks_Patch
+		{
+			static bool Prefix()
+			{
+				if (thisModEntry.Active && !overrideTrackReservation)
+				{
+					Debug.Log("[PersistentJobs] skipping track reservation");
+					return false;
+				}
+				return true;
 			}
 		}
 
