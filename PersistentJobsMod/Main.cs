@@ -969,7 +969,7 @@ namespace PersistentJobsMod
 							{
 								// force job's train cars to not be treated as player spawned
 								// DV will complain if we don't do this
-								tc.playerSpawnedCar = false;
+								Utilities.ConvertPlayerSpawnedTrainCar(tc);
 								trainCarCandidatesForDelete.Remove(tc);
 							});
 							totalCarsPreserved += jcc.trainCarsForJobChain.Count;

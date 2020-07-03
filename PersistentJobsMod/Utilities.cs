@@ -4,11 +4,38 @@ using System.Linq;
 using Harmony12;
 using UnityEngine;
 using DV.Logic.Job;
+using DV.ServicePenalty;
 
 namespace PersistentJobsMod
 {
 	class Utilities
 	{
+		public static void ConvertPlayerSpawnedTrainCar(TrainCar trainCar)
+		{
+			if (!trainCar.playerSpawnedCar) return;
+
+			trainCar.playerSpawnedCar = false;
+
+			CarStateSave carStateSave = trainCar.gameObject.GetComponent<CarStateSave>();
+			if (carStateSave == null)
+			{
+				throw new NullReferenceException(string.Format(
+					"The CarStateSave for TrainCar {0} could not be found!",
+					trainCar.logicCar.ID));
+			}
+
+			Traverse carStateSaveTraverse = Traverse.Create(carStateSave);
+			if (carStateSaveTraverse.Field("debtTrackerCar").GetValue<DebtTrackerCar>() != null) return;
+
+			CarDebtController carDebtController = trainCar.gameObject.AddComponent<CarDebtController>();
+			carDebtController.Initialize(
+				trainCar,
+				carStateSaveTraverse.Field("carDmg").GetValue<CarDamageModel>(),
+				carStateSaveTraverse.Field("cargoDmg").GetValue<CargoDamageModel>());
+			carStateSaveTraverse.Field("debtTrackerCar").SetValue(carDebtController.CarDebtTracker);
+			Debug.Log(string.Format("Converted player spawned TrainCar {0}", trainCar.logicCar.ID));
+		}
+
 		// taken from JobChainControllerWithEmptyHaulGeneration.ExtractCorrespondingTrainCars
 		public static List<TrainCar> ExtractCorrespondingTrainCars(JobChainController context, List<Car> logicCars)
 		{

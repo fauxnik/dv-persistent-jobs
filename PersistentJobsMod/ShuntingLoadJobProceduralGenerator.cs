@@ -533,6 +533,29 @@ namespace PersistentJobsMod
 						carsPerTrackDict[track].Add(trainCar.logicCar);
 					}
 
+					List<CargoType> cargoTypes = trainCarsToLoad.Select(
+						tc =>
+						{
+							List<CargoType> intersection = chosenCargoGroup.cargoTypes.Intersect(
+									Utilities.GetCargoTypesForCarType(tc.carType)).ToList();
+							if (!intersection.Any())
+							{
+								Debug.LogError(string.Format(
+									"[PersistentJobs] Unexpected trainCar with no overlapping cargoType in cargoGroup!\n" +
+									"cargo types for train car: [ {0} ]\n" +
+									"cargo types for chosen cargo group: [ {1} ]",
+									String.Join(", ", Utilities.GetCargoTypesForCarType(tc.carType)),
+									String.Join(", ", chosenCargoGroup.cargoTypes)));
+								return CargoType.None;
+							}
+							return Utilities.GetRandomFromEnumerable<CargoType>(intersection, rng);
+						}).ToList();
+
+					Debug.Log(string.Format(
+						"[PersistentJobs]\ntrain car types: [ {0} ]\ncargo types: [ {1} ]",
+						string.Join(", ", trainCarsToLoad.Select(tc => tc.carType)),
+						string.Join(", ", cargoTypes)));
+
 					// populate all the info; we'll generate the jobs later
 					jobsToGenerate.Add((
 						startingStation,
@@ -540,22 +563,7 @@ namespace PersistentJobsMod
 							kvPair => new CarsPerTrack(kvPair.Key, kvPair.Value)).ToList(),
 						destStation,
 						trainCarsToLoad,
-						trainCarsToLoad.Select(
-							tc =>
-							{
-								List<CargoType> intersection = chosenCargoGroup.cargoTypes.Intersect(
-										Utilities.GetCargoTypesForCarType(tc.carType)).ToList();
-								if (!intersection.Any())
-								{
-									Debug.LogError(string.Format("[PersistentJobs] Unexpected trainCar with no overlapping cargoType in cargoGroup!\n" +
-										"cargo types for train car: { {0} }\n" +
-										"cargo types for chosen cargo group: { {1} }",
-										String.Join(", ", Utilities.GetCargoTypesForCarType(tc.carType)),
-										String.Join(", ", chosenCargoGroup.cargoTypes)));
-									return CargoType.None;
-								}
-								return Utilities.GetRandomFromEnumerable<CargoType>(intersection, rng);
-							}).ToList()));
+						cargoTypes));
 				}
 			}
 
