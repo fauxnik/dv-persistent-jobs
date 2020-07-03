@@ -965,7 +965,13 @@ namespace PersistentJobsMod
 					{
 						if (jcc != null)
 						{
-							jcc.trainCarsForJobChain.ForEach(tc => trainCarCandidatesForDelete.Remove(tc));
+							jcc.trainCarsForJobChain.ForEach(tc =>
+							{
+								// force job's train cars to not be treated as player spawned
+								// DV will complain if we don't do this
+								tc.playerSpawnedCar = false;
+								trainCarCandidatesForDelete.Remove(tc);
+							});
 							totalCarsPreserved += jcc.trainCarsForJobChain.Count;
 							jcc.FinalizeSetupAndGenerateFirstJob();
 						}
@@ -988,7 +994,7 @@ namespace PersistentJobsMod
 				{
 					foreach (TrainCar tc in new List<TrainCar>(trainCarCandidatesForDelete))
 					{
-						if (!tc.IsLoco)
+						if (!tc.IsLoco || tc.playerSpawnedCar)
 						{
 							trainCarCandidatesForDelete.Remove(tc);
 							unusedTrainCarsMarkedForDelete.Add(tc);
