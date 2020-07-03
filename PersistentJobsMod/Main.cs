@@ -368,49 +368,14 @@ namespace PersistentJobsMod
 		[HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateInChainJob")]
 		class StationProceduralJobGenerator_GenerateInChainJob_Patch
 		{
-			static bool Prefix(
-				ref JobChainController __result,
-				StationController ___stationController,
-				JobType startingJobType,
-				bool forceFulfilledLicenseRequirements = false)
+			static bool Prefix(ref JobChainController __result)
 			{
 				if (thisModEntry.Active)
 				{
-					try
-					{
-						if (startingJobType == JobType.ShuntingUnload)
-						{
-							Debug.Log("[PersistentJobs] gen in shunting unload");
-							__result = ShuntingUnloadJobProceduralGenerator.GenerateShuntingUnloadJobWithCarSpawning(
-								___stationController,
-								forceFulfilledLicenseRequirements,
-								new System.Random(Environment.TickCount));
-							if (__result != null)
-							{
-								Debug.Log("[PersistentJobs] finalize in shunting unload");
-								__result.FinalizeSetupAndGenerateFirstJob();
-							}
-							return false;
-						}
-						Debug.LogWarning(string.Format(
-							"[PersistentJobs] Got unexpected JobType.{0} in {1}.{2} {3} patch. Falling back to base method.",
-							startingJobType.ToString(),
-							"StationProceduralJobGenerator",
-							"GenerateInChainJob",
-							"prefix"
-						));
-					}
-					catch (Exception e)
-					{
-						thisModEntry.Logger.Error(string.Format(
-							"Exception thrown during {0}.{1} {2} patch:\n{3}",
-							"StationProceduralJobGenerator",
-							"GenerateInChainJob",
-							"prefix",
-							e.ToString()
-						));
-						OnCriticalFailure();
-					}
+					Debug.Log("[PersistentJobs] cancelling inbound job spawning" +
+						" to keep tracks clear for outbound jobs from other stations");
+					__result = null;
+					return false;
 				}
 				return true;
 			}
