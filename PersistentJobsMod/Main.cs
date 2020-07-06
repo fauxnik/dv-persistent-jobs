@@ -716,7 +716,7 @@ namespace PersistentJobsMod
 						Debug.Log("[PersistentJobs] preserving cars");
 						foreach (TrainCar tc in new List<TrainCar>(trainCarsToDelete))
 						{
-							if (!tc.IsLoco || tc.playerSpawnedCar)
+							if (tc.playerSpawnedCar || !CarTypes.IsAnyLocomotiveOrTender(tc.carType))
 							{
 								trainCarsToDelete.Remove(tc);
 								totalCarsPreserved += 1;
@@ -994,7 +994,7 @@ namespace PersistentJobsMod
 				{
 					foreach (TrainCar tc in new List<TrainCar>(trainCarCandidatesForDelete))
 					{
-						if (!tc.IsLoco || tc.playerSpawnedCar)
+						if (tc.playerSpawnedCar || !CarTypes.IsAnyLocomotiveOrTender(tc.carType))
 						{
 							trainCarCandidatesForDelete.Remove(tc);
 							unusedTrainCarsMarkedForDelete.Add(tc);
