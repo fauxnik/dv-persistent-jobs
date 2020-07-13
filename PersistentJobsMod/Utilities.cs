@@ -252,6 +252,18 @@ namespace PersistentJobsMod
 			return (orderedCargoTypes, pickedCargoGroup);
 		}
 
+		public static void CrawlTaskDFS(Task task, Action<Task> action)
+		{
+			if (task is ParallelTasks || task is SequentialTasks)
+			{
+				Traverse.Create(task)
+					.Field("tasks")
+					.GetValue<IEnumerable<Task>>()
+					.Do(t => CrawlTaskDFS(t, action));
+			}
+			action(task);
+		}
+
 		// taken from StationProcedurationJobGenerator.GetRandomFromList
 		public static T GetRandomFromEnumerable<T>(IEnumerable<T> list, System.Random rng)
 		{
