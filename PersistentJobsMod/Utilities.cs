@@ -16,23 +16,53 @@ namespace PersistentJobsMod
 
 			trainCar.playerSpawnedCar = false;
 
-			CarStateSave carStateSave = trainCar.gameObject.GetComponent<CarStateSave>();
-			if (carStateSave == null)
+			CarStateSave carStateSave = Traverse.Create(trainCar).Field("carStateSave").GetValue<CarStateSave>();
+			if (Traverse.Create(carStateSave).Field("debtTrackerCar").GetValue<DebtTrackerCar>() != null) return;
+
+			TrainCarPlatesController trainPlatesCtrl
+				= Traverse.Create(trainCar).Field("trainPlatesCtrl").GetValue<TrainCarPlatesController>();
+
+			CarDamageModel carDamage = Traverse.Create(trainCar).Field("carDmg").GetValue<CarDamageModel>();
+			if (carDamage == null)
 			{
-				throw new NullReferenceException(string.Format(
-					"The CarStateSave for TrainCar {0} could not be found!",
+				Debug.Log(string.Format(
+					"[PersistentJobs] Creating CarDamageModel for TrainCar[{0}]...",
 					trainCar.logicCar.ID));
+				carDamage = trainCar.gameObject.AddComponent<CarDamageModel>();
+				Traverse.Create(trainCar).Field("carDmg").SetValue(carDamage);
+				carDamage.OnCreated(trainCar);
+				Traverse.Create(trainPlatesCtrl)
+					.Method("UpdateCarHealth", new Type[] { typeof(float) })
+					.GetValue(carDamage.EffectiveHealthPercentage100Notation);
+				carDamage.CarEffectiveHealthStateUpdate += carHealthPercentage => Traverse.Create(trainPlatesCtrl)
+					.Method("UpdateCarHealth", new Type[] { typeof(float) })
+					.GetValue(carHealthPercentage);
 			}
 
-			Traverse carStateSaveTraverse = Traverse.Create(carStateSave);
-			if (carStateSaveTraverse.Field("debtTrackerCar").GetValue<DebtTrackerCar>() != null) return;
+			CargoDamageModel cargoDamage = trainCar.CargoDamage;
+			if (cargoDamage == null && !trainCar.IsLoco)
+			{
+				Debug.Log(string.Format(
+					"[PersistentJobs] Creating CargoDamageModel for TrainCar[{0}]...",
+					trainCar.logicCar.ID));
+				cargoDamage = trainCar.gameObject.AddComponent<CargoDamageModel>();
+				Traverse.Create(trainCar).Property("cargoDamage").SetValue(cargoDamage);
+				cargoDamage.OnCreated(trainCar);
+				Traverse.Create(trainPlatesCtrl)
+					.Method("UpdateCargoHealth", new Type[] { typeof(float) })
+					.GetValue(cargoDamage.EffectiveHealthPercentage100Notation);
+				cargoDamage.CargoEffectiveHealthStateUpdate += cargoHealthPercentage => Traverse.Create(trainPlatesCtrl)
+					.Method("UpdateCargoHealth", new Type[] { typeof(float) })
+					.GetValue(cargoHealthPercentage);
+			}
 
-			CarDebtController carDebtController = trainCar.gameObject.AddComponent<CarDebtController>();
-			carDebtController.Initialize(
-				trainCar,
-				carStateSaveTraverse.Field("carDmg").GetValue<CarDamageModel>(),
-				carStateSaveTraverse.Field("cargoDmg").GetValue<CargoDamageModel>());
-			carStateSaveTraverse.Field("debtTrackerCar").SetValue(carDebtController.CarDebtTracker);
+			CarDebtController carDebtController
+				= Traverse.Create(trainCar).Field("carDebtController").GetValue<CarDebtController>();
+			carDebtController.SetDebtTracker(carDamage, cargoDamage);
+
+			carStateSave.Initialize(carDamage, cargoDamage);
+			carStateSave.SetDebtTrackerCar(carDebtController.CarDebtTracker);
+
 			Debug.Log(string.Format("Converted player spawned TrainCar {0}", trainCar.logicCar.ID));
 		}
 

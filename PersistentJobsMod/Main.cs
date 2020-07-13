@@ -663,8 +663,10 @@ namespace PersistentJobsMod
 						// ------ BEGIN JOB GENERATION ------
 						// group trainCars by trainset
 						Debug.Log("[PersistentJobs] grouping trainCars by trainSet");
+						List<TrainCar> nonLocoTrainCarsToDelete
+							= trainCarsToDelete.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType)).ToList();
 						Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet
-								= ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarsToDelete);
+								= ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(nonLocoTrainCarsToDelete);
 						Debug.Log(string.Format(
 							"[PersistentJobs] found {0} trainSets",
 							trainCarsPerTrainSet.Count));
@@ -854,8 +856,11 @@ namespace PersistentJobsMod
 				Dictionary<Trainset, List<TrainCar>> trainCarsPerTrainSet = null;
 				try
 				{
-					trainCarsPerTrainSet
-						= ShuntingLoadJobProceduralGenerator.GroupTrainCarsByTrainset(trainCarCandidatesForDelete);
+					List<TrainCar> nonLocoTrainCarCandidatesForDelete = trainCarCandidatesForDelete
+						.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType))
+						.ToList();
+					trainCarsPerTrainSet = ShuntingLoadJobProceduralGenerator
+						.GroupTrainCarsByTrainset(nonLocoTrainCarCandidatesForDelete);
 				}
 				catch (Exception e)
 				{
