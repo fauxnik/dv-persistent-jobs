@@ -1100,7 +1100,7 @@ namespace PersistentJobsMod
 						{
 							__result = Utilities.GetRandomFromEnumerable(
 								tracksWithFreeSpace,
-								new System.Random(Environment.TickCount));
+								new System.Random());
 						}
 						return false;
 					}
