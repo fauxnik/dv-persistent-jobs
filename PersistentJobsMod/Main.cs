@@ -173,6 +173,53 @@ namespace PersistentJobsMod
 			}
 		}
 
+		// reserves tracks for taken jobs when loading save file
+		[HarmonyPatch(typeof(JobSaveManager), "LoadJobChain")]
+		class JobSaveManager_LoadJobChain_Patch
+		{
+			static void Postfix(JobChainSaveData chainSaveData)
+			{
+				try
+				{
+					if (chainSaveData.jobTaken)
+					{
+						// reserve space for this job
+						StationProceduralJobsController[] stationJobControllers
+							= UnityEngine.Object.FindObjectsOfType<StationProceduralJobsController>();
+						JobChainController jobChainController = null;
+						for (int i = 0; i < stationJobControllers.Length && jobChainController == null; i++)
+						{
+							foreach (JobChainController jcc in stationJobControllers[i].GetCurrentJobChains())
+							{
+								if (jcc.currentJobInChain.ID == chainSaveData.firstJobId)
+								{
+									jobChainController = jcc;
+									break;
+								}
+							}
+						}
+						if (jobChainController == null)
+						{
+							Debug.LogWarning(string.Format(
+								"[PersistentJobs] could not find JobChainController for Job[{0}]; skipping track reservation!",
+								chainSaveData.firstJobId));
+						}
+						else
+						{
+							overrideTrackReservation = true;
+							Traverse.Create(jobChainController).Method("ReserveRequiredTracks", new Type[] { }).GetValue();
+							overrideTrackReservation = false;
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					// TODO: what to do if reserving tracks fails?
+					thisModEntry.Logger.Warning(string.Format("Reserving track space for Job[{1}] failed with exception:\n{0}", e, chainSaveData.firstJobId));
+				}
+			}
+		}
+
 		// prevents jobs from expiring due to the player's distance from the station
 		[HarmonyPatch(typeof(StationController), "ExpireAllAvailableJobsInStation")]
 		class StationController_ExpireAllAvailableJobsInStation_Patch
