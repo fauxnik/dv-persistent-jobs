@@ -4,6 +4,41 @@
             "Id": "PersistentJobs",
             "Version": "2.1.1",
             "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.1.1/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "2.0.2",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.0.2/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "2.1.0",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.1.0/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "2.0.1",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.0.1/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "2.0.0",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.0.0/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "1.0.2",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v1.0.2/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "1.0.1",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v1.0.1/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
+            "Version": "1.0.0",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v1.0.0/PersistentJobsMod.zip"
         }
     ]
 }
