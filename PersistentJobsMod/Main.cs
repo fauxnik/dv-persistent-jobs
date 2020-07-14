@@ -357,42 +357,9 @@ namespace PersistentJobsMod
 							"[PersistentJobs] could not find JobChainController for Job[{0}]",
 							job.ID));
 					}
-					else if (job.jobType == JobType.ShuntingLoad)
-					{
-						// shunting load jobs don't need to reserve space b/c their destination track task will be removed
-						Debug.Log(string.Format(
-							"[PersistentJobs] skipping track reservation for Job[{0}] because it's a shunting load job",
-							job.ID));
-					}
 					else
 					{
 						ReserveOrReplaceRequiredTracks(jobChainController);
-					}
-
-					// for shunting load jobs, don't require player to spot the train on a track after loading
-					if (job.jobType == JobType.ShuntingLoad)
-					{
-						SequentialTasks sequence = job.tasks[0] as SequentialTasks;
-						if (sequence != null)
-						{
-							LinkedList<Task> tasks = Traverse.Create(sequence)
-								.Field("tasks")
-								.GetValue<LinkedList<Task>>();
-							LinkedListNode<Task> cursor = tasks.First;
-							while (cursor != null && Utilities.TaskAnyDFS(
-								cursor.Value,
-								t => t.InstanceTaskType == TaskType.Warehouse))
-							{
-								Debug.Log("[PersistentJobs] searching for warehouse task");
-								cursor = cursor.Next;
-							}
-							// cursor points at the parallel task of warehouse tasks (or null); cautiously remove everything after it
-							while (cursor != null && cursor.Next != null)
-							{
-								Debug.Log("[PersistentJobs] removeing task after warehouse task");
-								tasks.Remove(cursor.Next);
-							}
-						}
 					}
 				}
 				catch (Exception e)
