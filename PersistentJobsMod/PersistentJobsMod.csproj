@@ -79,6 +79,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CarTypesPerCargoType.cs" />
+    <Compile Include="JobProceduralGenerationUtilities.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ShuntingLoadJobProceduralGenerator.cs" />
