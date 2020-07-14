@@ -204,6 +204,12 @@ namespace PersistentJobsMod
 								"[PersistentJobs] could not find JobChainController for Job[{0}]; skipping track reservation!",
 								chainSaveData.firstJobId));
 						}
+						else if (jobChainController.currentJobInChain.jobType == JobType.ShuntingLoad)
+						{
+							Debug.Log(string.Format(
+							"[PersistentJobs] skipping track reservation for Job[{0}] because it's a shunting load job",
+							jobChainController.currentJobInChain.ID));
+						}
 						else
 						{
 							overrideTrackReservation = true;
