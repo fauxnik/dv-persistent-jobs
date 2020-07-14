@@ -398,7 +398,7 @@ namespace PersistentJobsMod
 								if (replacementTrack == null)
 								{
 									Debug.LogWarning(string.Format(
-										"[PersistentJobs] Cant't find track with enough free space for Job[{0}]. Skipping track reservation!",
+										"[PersistentJobs] Can't find track with enough free space for Job[{0}]. Skipping track reservation!",
 										key.job.ID));
 									continue;
 								}
@@ -476,27 +476,60 @@ namespace PersistentJobsMod
 				StationController stationController
 					= allStations.ToList().Find(sc => sc.stationInfo.YardID == oldTrack.ID.yardId);
 
-				// find track with enough free space
+				// setup preferred tracks
+				List<Track>[] preferredTracks;
 				Yard stationYard = stationController.logicStation.yard;
-				YardTracksOrganizer yto = YardTracksOrganizer.Instance;
 				if (stationYard.StorageTracks.Contains(oldTrack))
 				{
-					return yto.GetTrackThatHasEnoughFreeSpace(stationYard.StorageTracks, trainLength);
+					// shunting unload, logistical haul
+					preferredTracks = new List<Track>[] {
+						stationYard.StorageTracks,
+						stationYard.TransferOutTracks,
+						stationYard.TransferInTracks };
 				}
 				else if (stationYard.TransferInTracks.Contains(oldTrack))
 				{
-					return yto.GetTrackThatHasEnoughFreeSpace(stationYard.TransferInTracks, trainLength);
+					// freight haul
+					preferredTracks = new List<Track>[] {
+						stationYard.TransferInTracks,
+						stationYard.TransferOutTracks,
+						stationYard.StorageTracks };
 				}
 				else if (stationYard.TransferOutTracks.Contains(oldTrack))
 				{
-					return yto.GetTrackThatHasEnoughFreeSpace(stationYard.TransferOutTracks, trainLength);
+					// shunting load
+					preferredTracks = new List<Track>[] {
+						stationYard.TransferOutTracks,
+						stationYard.StorageTracks,
+						stationYard.TransferInTracks };
+				}
+				else
+				{
+					Debug.LogError(string.Format(
+						"[PersistentJobs] Cant't find track group for Track[{0}] in Station[{1}]. Skipping reservation!",
+						oldTrack.ID,
+						stationController.logicStation.ID));
+					return null;
 				}
 
-				Debug.LogWarning(string.Format(
-					"[PersistentJobs] Cant't find track group for Track[{0}] in Station[{1}]. Skipping reservation!",
-					oldTrack.ID,
-					stationController.logicStation.ID));
-				return null;
+				// find track with enough free space
+				Track targetTrack = null;
+				YardTracksOrganizer yto = YardTracksOrganizer.Instance;
+				for (int p = 0; targetTrack == null && p < preferredTracks.Length; p++)
+				{
+					List<Track> trackGroup = preferredTracks[p];
+					targetTrack = yto.GetTrackThatHasEnoughFreeSpace(trackGroup, trainLength);
+				}
+
+				if (targetTrack == null)
+				{
+					Debug.LogWarning(string.Format(
+						"[PersistentJobs] Cant't find any track to replace Track[{0}] in Station[{1}]. Skipping reservation!",
+						oldTrack.ID,
+						stationController.logicStation.ID));
+				}
+
+				return targetTrack;
 			}
 		}
 
@@ -1268,6 +1301,11 @@ namespace PersistentJobsMod
 								tracksWithFreeSpace.Add(track);
 							}
 						}
+						Debug.Log(string.Format(
+							"[PersistentJobs] {0}/{1} tracks have at least {2}m available",
+							tracksWithFreeSpace.Count,
+							tracks.Count,
+							requiredLength));
 						if (tracksWithFreeSpace.Count > 0)
 						{
 							__result = Utilities.GetRandomFromEnumerable(
