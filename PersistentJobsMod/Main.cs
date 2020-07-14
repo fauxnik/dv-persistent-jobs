@@ -357,9 +357,23 @@ namespace PersistentJobsMod
 							"[PersistentJobs] could not find JobChainController for Job[{0}]",
 							job.ID));
 					}
+					else if (job.jobType == JobType.ShuntingLoad)
+					{
+						// shunting load jobs don't need to reserve space
+						// their destination track task will be changed to the warehouse track
+						Debug.Log(string.Format(
+							"[PersistentJobs] skipping track reservation for Job[{0}] because it's a shunting load job",
+							job.ID));
+					}
 					else
 					{
 						ReserveOrReplaceRequiredTracks(jobChainController);
+					}
+
+					// for shunting load jobs, don't require player to spot the train on a track after loading
+					if (job.jobType == JobType.ShuntingLoad)
+					{
+						ReplaceShuntingLoadDestination(job);
 					}
 				}
 				catch (Exception e)
@@ -371,6 +385,72 @@ namespace PersistentJobsMod
 					OnCriticalFailure();
 				}
 				return true;
+			}
+
+			private static void ReplaceShuntingLoadDestination(Job job)
+			{
+				Debug.Log("[PersistentJobs] attempting to replace destination track with warehouse track...");
+				SequentialTasks sequence = job.tasks[0] as SequentialTasks;
+				if (sequence == null)
+				{
+					Debug.LogError("    couldn't find sequential task!");
+					return;
+				}
+
+				LinkedList<Task> tasks = Traverse.Create(sequence)
+					.Field("tasks")
+					.GetValue<LinkedList<Task>>();
+
+				if (tasks == null)
+				{
+					Debug.LogError("    couldn't find child tasks!");
+					return;
+				}
+
+				LinkedListNode<Task> cursor = tasks.First;
+
+				if (cursor == null)
+				{
+					Debug.LogError("    first task in sequence was null!");
+					return;
+				}
+
+				while (cursor != null && Utilities.TaskAnyDFS(
+					cursor.Value,
+					t => t.InstanceTaskType != TaskType.Warehouse))
+				{
+					Debug.Log("    searching for warehouse task...");
+					cursor = cursor.Next;
+				}
+
+				if (cursor == null)
+				{
+					Debug.LogError("    couldn't find warehouse task!");
+					return;
+				}
+
+				// cursor points at the parallel task of warehouse tasks
+				// replace the destination track of all following tasks with the warehouse track
+				WarehouseTask wt = (Utilities.TaskFindDFS(
+					cursor.Value,
+					t => t.InstanceTaskType == TaskType.Warehouse) as WarehouseTask);
+				WarehouseMachine wm = wt != null ? wt.warehouseMachine : null;
+
+				if (wm == null)
+				{
+					Debug.LogError("    couldn't find warehouse machine!");
+					return;
+				}
+
+				while ((cursor = cursor.Next) != null)
+				{
+					Debug.Log("    replace destination tracks...");
+					Utilities.TaskDoDFS(
+						cursor.Value,
+						t => Traverse.Create(t).Field("destinationTrack").SetValue(wm.WarehouseTrack));
+				}
+
+				Debug.Log("    done!");
 			}
 
 			private static bool AreTaskCarsInRange(Task task, StationJobGenerationRange stationRange)
