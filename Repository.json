@@ -2,6 +2,11 @@
     "Releases": [
         {
             "Id": "PersistentJobs",
+            "Version": "2.0.4",
+            "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.0.4/PersistentJobsMod.zip"
+        },
+        {
+            "Id": "PersistentJobs",
             "Version": "2.0.3",
             "DownloadUrl": "https://github.com/fauxnik/DerailValleyPersistentJobsMod/releases/download/v2.0.3/PersistentJobsMod.zip"
         },
