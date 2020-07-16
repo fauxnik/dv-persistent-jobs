@@ -115,7 +115,6 @@ namespace PersistentJobsMod
 				destStation,
 				orderedTrainCars,
 				orderedCargoTypes,
-				Enumerable.Repeat(1.0f, countTrainCars).ToList(),
 				rng,
 				true);
 
@@ -135,7 +134,6 @@ namespace PersistentJobsMod
 			StationController destStation,
 			List<TrainCar> trainCars,
 			List<CargoType> transportedCargoPerCar,
-			List<float> cargoAmountPerCar,
 			System.Random rng,
 			bool forceCorrectCargoStateOnCars = false)
 		{
@@ -195,7 +193,8 @@ namespace PersistentJobsMod
 				destinationTrack,
 				trainCars,
 				transportedCargoPerCar,
-				cargoAmountPerCar,
+				trainCars.Select(
+					tc => tc.logicCar.CurrentCargoTypeInCar == CargoType.None ? 1.0f : tc.logicCar.LoadedCargoAmount).ToList(),
 				forceCorrectCargoStateOnCars,
 				bonusTimeLimit,
 				initialWage,
@@ -254,6 +253,59 @@ namespace PersistentJobsMod
 			staticTransportJobDefinition.forceCorrectCargoStateOnCars = forceCorrectCargoStateOnCars;
 			jobChainController.AddJobDefinitionToChain(staticTransportJobDefinition);
 			return jobChainController;
+		}
+
+		public static List<(StationController, Track, StationController, List<TrainCar>, List<CargoType>)>
+			ComputeJobInfosFromCargoGroupsPerTrainCarSetPerStation(
+				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc,
+				System.Random rng)
+		{
+			List<(StationController, Track, StationController, List<TrainCar>, List<CargoType>)> jobsToGenerate
+				= new List<(StationController, Track, StationController, List<TrainCar>, List<CargoType>)>();
+
+			foreach (StationController startingStation in cgsPerTcsPerSc.Keys)
+			{
+				List<(List<TrainCar>, List<CargoGroup>)> cgsPerTcs = cgsPerTcsPerSc[startingStation];
+
+				foreach ((List<TrainCar> trainCars, List<CargoGroup> cargoGroups) in cgsPerTcs)
+				{
+					CargoGroup chosenCargoGroup = Utilities.GetRandomFromEnumerable(cargoGroups, rng);
+					StationController destinationStation
+						= Utilities.GetRandomFromEnumerable(chosenCargoGroup.stations, rng);
+
+					// populate all the info; we'll generate the jobs later
+					jobsToGenerate.Add((
+						startingStation,
+						trainCars[0].logicCar.CurrentTrack,
+						destinationStation,
+						trainCars,
+						trainCars.Select(tc => tc.logicCar.CurrentCargoTypeInCar).ToList()));
+				}
+			}
+
+			return jobsToGenerate;
+		}
+
+		public static IEnumerable<JobChainController> doJobGeneration(
+			List<(StationController, Track, StationController, List<TrainCar>, List<CargoType>)> jobInfos,
+			System.Random rng,
+			bool forceCorrectCargoStateOnCars = true)
+		{
+			return jobInfos.Select((definition) =>
+			{
+				// I miss having a spread operator :(
+				(StationController ss, Track st, StationController ds, _, _) = definition;
+				(_, _, _, List<TrainCar> tcs, List<CargoType> cts) = definition;
+
+				return (JobChainController)GenerateTransportJobWithExistingCars(
+					ss,
+					st,
+					ds,
+					tcs,
+					cts,
+					rng,
+					forceCorrectCargoStateOnCars);
+			});
 		}
 	}
 }
