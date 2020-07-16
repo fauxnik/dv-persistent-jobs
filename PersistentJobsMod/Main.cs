@@ -173,6 +173,53 @@ namespace PersistentJobsMod
 			}
 		}
 
+		// reserves tracks for taken jobs when loading save file
+		[HarmonyPatch(typeof(JobSaveManager), "LoadJobChain")]
+		class JobSaveManager_LoadJobChain_Patch
+		{
+			static void Postfix(JobChainSaveData chainSaveData)
+			{
+				try
+				{
+					if (chainSaveData.jobTaken)
+					{
+						// reserve space for this job
+						StationProceduralJobsController[] stationJobControllers
+							= UnityEngine.Object.FindObjectsOfType<StationProceduralJobsController>();
+						JobChainController jobChainController = null;
+						for (int i = 0; i < stationJobControllers.Length && jobChainController == null; i++)
+						{
+							foreach (JobChainController jcc in stationJobControllers[i].GetCurrentJobChains())
+							{
+								if (jcc.currentJobInChain.ID == chainSaveData.firstJobId)
+								{
+									jobChainController = jcc;
+									break;
+								}
+							}
+						}
+						if (jobChainController == null)
+						{
+							Debug.LogWarning(string.Format(
+								"[PersistentJobs] could not find JobChainController for Job[{0}]; skipping track reservation!",
+								chainSaveData.firstJobId));
+						}
+						else
+						{
+							overrideTrackReservation = true;
+							Traverse.Create(jobChainController).Method("ReserveRequiredTracks", new Type[] { }).GetValue();
+							overrideTrackReservation = false;
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					// TODO: what to do if reserving tracks fails?
+					thisModEntry.Logger.Warning(string.Format("Reserving track space for Job[{1}] failed with exception:\n{0}", e, chainSaveData.firstJobId));
+				}
+			}
+		}
+
 		// prevents jobs from expiring due to the player's distance from the station
 		[HarmonyPatch(typeof(StationController), "ExpireAllAvailableJobsInStation")]
 		class StationController_ExpireAllAvailableJobsInStation_Patch
@@ -279,9 +326,7 @@ namespace PersistentJobsMod
 					}
 					else
 					{
-						overrideTrackReservation = true;
-						Traverse.Create(jobChainController).Method("ReserveRequiredTracks", new Type[] { }).GetValue();
-						overrideTrackReservation = false;
+						ReserveOrReplaceRequiredTracks(jobChainController);
 					}
 
 					// expire the job if all associated cars are outside the job destruction range
@@ -325,6 +370,166 @@ namespace PersistentJobsMod
 					});
 					return carInRangeOfStation != null;
 				};
+			}
+
+			private static void ReserveOrReplaceRequiredTracks(JobChainController jobChainController)
+			{
+				List<StaticJobDefinition> jobChain = Traverse.Create(jobChainController)
+							.Field("jobChain")
+							.GetValue<List<StaticJobDefinition>>();
+				Dictionary<StaticJobDefinition, List<TrackReservation>> jobDefToCurrentlyReservedTracks
+					= Traverse.Create(jobChainController)
+						.Field("jobDefToCurrentlyReservedTracks")
+						.GetValue<Dictionary<StaticJobDefinition, List<TrackReservation>>>();
+				for (int i = 0; i < jobChain.Count; i++)
+				{
+					StaticJobDefinition key = jobChain[i];
+					if (jobDefToCurrentlyReservedTracks.ContainsKey(key))
+					{
+						List<TrackReservation> trackReservations = jobDefToCurrentlyReservedTracks[key];
+						for (int j = 0; j < trackReservations.Count; j++)
+						{
+							Track reservedTrack = trackReservations[j].track;
+							float reservedLength = trackReservations[j].reservedLength;
+							if (!YardTracksOrganizer.Instance.ReserveSpace(reservedTrack, reservedLength))
+							{
+								// reservation unsuccessful; find a different track with enough space & update job data
+								Track replacementTrack = GetReplacementTrack(reservedTrack, reservedLength);
+								if (replacementTrack == null)
+								{
+									Debug.LogWarning(string.Format(
+										"[PersistentJobs] Can't find track with enough free space for Job[{0}]. Skipping track reservation!",
+										key.job.ID));
+									continue;
+								}
+
+								YardTracksOrganizer.Instance.ReserveSpace(replacementTrack, reservedLength);
+
+								// update reservation data
+								trackReservations.RemoveAt(j);
+								trackReservations.Insert(j, new TrackReservation(replacementTrack, reservedLength));
+
+								// update static job definition data
+								if (key is StaticEmptyHaulJobDefinition)
+								{
+									(key as StaticEmptyHaulJobDefinition).destinationTrack = replacementTrack;
+								}
+								else if (key is StaticShuntingLoadJobDefinition)
+								{
+									(key as StaticShuntingLoadJobDefinition).destinationTrack = replacementTrack;
+								}
+								else if (key is StaticTransportJobDefinition)
+								{
+									(key as StaticTransportJobDefinition).destinationTrack = replacementTrack;
+								}
+								else if (key is StaticShuntingUnloadJobDefinition)
+								{
+									(key as StaticShuntingUnloadJobDefinition).carsPerDestinationTrack
+										= (key as StaticShuntingUnloadJobDefinition).carsPerDestinationTrack
+											.Select(cpt => cpt.track == reservedTrack ? new CarsPerTrack(replacementTrack, cpt.cars) : cpt)
+											.ToList();
+								}
+								else
+								{
+									throw new ArgumentOutOfRangeException(string.Format(
+										"[PersistentJobs] Unaccounted for JobType[{1}] encountered while reserving track space for Job[{0}].",
+										key.job.ID,
+										key.job.jobType));
+								}
+
+								// update task data
+								foreach(Task task in key.job.tasks)
+								{
+									Utilities.CrawlTaskDFS(task, t =>
+									{
+										if (t is TransportTask)
+										{
+											Traverse destinationTrack = Traverse.Create(t).Field("destinationTrack");
+											if (destinationTrack.GetValue<Track>() == reservedTrack)
+											{
+												destinationTrack.SetValue(replacementTrack);
+											}
+										}
+									});
+								}
+							}
+						}
+					}
+					else
+					{
+						Debug.LogError(
+							string.Format(
+								"[PersistentJobs] No reservation data for {0}[{1}] found!" +
+								" Reservation data can be empty, but it needs to be in {2}.",
+								"jobChain",
+								i,
+								"jobDefToCurrentlyReservedTracks"),
+							jobChain[i]);
+					}
+				}
+			}
+
+			private static Track GetReplacementTrack(Track oldTrack, float trainLength)
+			{
+				// find station controller for track
+				StationController[] allStations = UnityEngine.Object.FindObjectsOfType<StationController>();
+				StationController stationController
+					= allStations.ToList().Find(sc => sc.stationInfo.YardID == oldTrack.ID.yardId);
+
+				// setup preferred tracks
+				List<Track>[] preferredTracks;
+				Yard stationYard = stationController.logicStation.yard;
+				if (stationYard.StorageTracks.Contains(oldTrack))
+				{
+					// shunting unload, logistical haul
+					preferredTracks = new List<Track>[] {
+						stationYard.StorageTracks,
+						stationYard.TransferOutTracks,
+						stationYard.TransferInTracks };
+				}
+				else if (stationYard.TransferInTracks.Contains(oldTrack))
+				{
+					// freight haul
+					preferredTracks = new List<Track>[] {
+						stationYard.TransferInTracks,
+						stationYard.TransferOutTracks,
+						stationYard.StorageTracks };
+				}
+				else if (stationYard.TransferOutTracks.Contains(oldTrack))
+				{
+					// shunting load
+					preferredTracks = new List<Track>[] {
+						stationYard.TransferOutTracks,
+						stationYard.StorageTracks,
+						stationYard.TransferInTracks };
+				}
+				else
+				{
+					Debug.LogError(string.Format(
+						"[PersistentJobs] Cant't find track group for Track[{0}] in Station[{1}]. Skipping reservation!",
+						oldTrack.ID,
+						stationController.logicStation.ID));
+					return null;
+				}
+
+				// find track with enough free space
+				Track targetTrack = null;
+				YardTracksOrganizer yto = YardTracksOrganizer.Instance;
+				for (int p = 0; targetTrack == null && p < preferredTracks.Length; p++)
+				{
+					List<Track> trackGroup = preferredTracks[p];
+					targetTrack = yto.GetTrackThatHasEnoughFreeSpace(trackGroup, trainLength);
+				}
+
+				if (targetTrack == null)
+				{
+					Debug.LogWarning(string.Format(
+						"[PersistentJobs] Cant't find any track to replace Track[{0}] in Station[{1}]. Skipping reservation!",
+						oldTrack.ID,
+						stationController.logicStation.ID));
+				}
+
+				return targetTrack;
 			}
 		}
 
@@ -1259,11 +1464,16 @@ namespace PersistentJobsMod
 								tracksWithFreeSpace.Add(track);
 							}
 						}
+						Debug.Log(string.Format(
+							"[PersistentJobs] {0}/{1} tracks have at least {2}m available",
+							tracksWithFreeSpace.Count,
+							tracks.Count,
+							requiredLength));
 						if (tracksWithFreeSpace.Count > 0)
 						{
 							__result = Utilities.GetRandomFromEnumerable(
 								tracksWithFreeSpace,
-								new System.Random(Environment.TickCount));
+								new System.Random());
 						}
 						return false;
 					}
