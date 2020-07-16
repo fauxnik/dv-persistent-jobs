@@ -252,16 +252,40 @@ namespace PersistentJobsMod
 			return (orderedCargoTypes, pickedCargoGroup);
 		}
 
-		public static void CrawlTaskDFS(Task task, Action<Task> action)
+		public static void TaskDoDFS(Task task, Action<Task> action)
 		{
 			if (task is ParallelTasks || task is SequentialTasks)
 			{
 				Traverse.Create(task)
 					.Field("tasks")
 					.GetValue<IEnumerable<Task>>()
-					.Do(t => CrawlTaskDFS(t, action));
+					.Do(t => TaskDoDFS(t, action));
 			}
 			action(task);
+		}
+
+		public static bool TaskAnyDFS(Task task, Func<Task, bool> predicate)
+		{
+			if (task is ParallelTasks || task is SequentialTasks)
+			{
+				return Traverse.Create(task)
+					.Field("tasks")
+					.GetValue<IEnumerable<Task>>()
+					.Any(t => TaskAnyDFS(t, predicate));
+			}
+			return predicate(task);
+		}
+
+		public static Task TaskFindDFS(Task task, Func<Task, bool> predicate)
+		{
+			if (task is ParallelTasks || task is SequentialTasks)
+			{
+				return Traverse.Create(task)
+					.Field("tasks")
+					.GetValue<IEnumerable<Task>>()
+					.Aggregate(null as Task, (found, t) => found == null ? TaskFindDFS(t, predicate) : found);
+			}
+			return predicate(task) ? task : null;
 		}
 
 		// taken from StationProcedurationJobGenerator.GetRandomFromList

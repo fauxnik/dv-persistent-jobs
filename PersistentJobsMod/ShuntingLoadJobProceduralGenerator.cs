@@ -326,7 +326,7 @@ namespace PersistentJobsMod
 				requiredLicenses
 			);
 			staticShuntingLoadJobDefinition.carsPerStartingTrack = carsPerStartingTrack;
-			staticShuntingLoadJobDefinition.destinationTrack = destinationTrack;
+			staticShuntingLoadJobDefinition.destinationTrack = loadMachine.WarehouseTrack;
 			staticShuntingLoadJobDefinition.loadData = loadData;
 			staticShuntingLoadJobDefinition.loadMachine = loadMachine;
 			staticShuntingLoadJobDefinition.forceCorrectCargoStateOnCars = forceCorrectCargoStateOnCars;

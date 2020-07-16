@@ -204,6 +204,12 @@ namespace PersistentJobsMod
 								"[PersistentJobs] could not find JobChainController for Job[{0}]; skipping track reservation!",
 								chainSaveData.firstJobId));
 						}
+						else if (jobChainController.currentJobInChain.jobType == JobType.ShuntingLoad)
+						{
+							Debug.Log(string.Format(
+							"[PersistentJobs] skipping track reservation for Job[{0}] because it's a shunting load job",
+							jobChainController.currentJobInChain.ID));
+						}
 						else
 						{
 							overrideTrackReservation = true;
@@ -281,7 +287,7 @@ namespace PersistentJobsMod
 		[HarmonyPatch(typeof(JobValidator), "ProcessJobOverview")]
 		class JobValidator_ProcessJobOverview_Patch
 		{
-			static void Prefix(
+			static bool Prefix(
 				List<StationController> ___allStations,
 				DV.Printers.PrinterController ___bookletPrinter,
 				JobOverview jobOverview)
@@ -290,7 +296,7 @@ namespace PersistentJobsMod
 				{
 					if (!thisModEntry.Active)
 					{
-						return;
+						return true;
 					}
 
 					Job job = jobOverview.job;
@@ -300,7 +306,40 @@ namespace PersistentJobsMod
 
 					if (___bookletPrinter.IsOnCooldown || job.State != JobState.Available || stationController == null)
 					{
-						return;
+						return true;
+					}
+
+					// for shunting (un)load jobs, require cars to not already be on the warehouse track
+					if (job.jobType == JobType.ShuntingLoad || job.jobType == JobType.ShuntingUnload)
+					{
+						WarehouseTask wt = job.tasks.Aggregate(
+							null as Task,
+							(found, outerTask) => found == null
+								? Utilities.TaskFindDFS(outerTask, innerTask => innerTask is WarehouseTask)
+								: found) as WarehouseTask;
+						WarehouseMachine wm = wt != null ? wt.warehouseMachine : null;
+						if (wm != null && job.tasks.Any(
+							outerTask => Utilities.TaskAnyDFS(
+								outerTask,
+								innerTask => IsAnyTaskCarOnTrack(innerTask, wm.WarehouseTrack))))
+						{
+							___bookletPrinter.PlayErrorSound();
+							return false;
+						}
+					}
+
+					// expire the job if all associated cars are outside the job destruction range
+					// the base method's logic will handle generating the expired report
+					StationJobGenerationRange stationRange = Traverse.Create(stationController)
+						.Field("stationRange")
+						.GetValue<StationJobGenerationRange>();
+					if (!job.tasks.Any(
+						outerTask => Utilities.TaskAnyDFS(
+							outerTask,
+							innerTask => AreTaskCarsInRange(innerTask, stationRange))))
+					{
+						job.ExpireJob();
+						return true;
 					}
 
 					// reserve space for this job
@@ -311,7 +350,7 @@ namespace PersistentJobsMod
 					{
 						foreach (JobChainController jcc in stationJobControllers[i].GetCurrentJobChains())
 						{
-							if (jcc.currentJobInChain == jobOverview.job)
+							if (jcc.currentJobInChain == job)
 							{
 								jobChainController = jcc;
 								break;
@@ -322,21 +361,25 @@ namespace PersistentJobsMod
 					{
 						Debug.LogWarning(string.Format(
 							"[PersistentJobs] could not find JobChainController for Job[{0}]",
-							jobOverview.job.ID));
+							job.ID));
+					}
+					else if (job.jobType == JobType.ShuntingLoad)
+					{
+						// shunting load jobs don't need to reserve space
+						// their destination track task will be changed to the warehouse track
+						Debug.Log(string.Format(
+							"[PersistentJobs] skipping track reservation for Job[{0}] because it's a shunting load job",
+							job.ID));
 					}
 					else
 					{
 						ReserveOrReplaceRequiredTracks(jobChainController);
 					}
 
-					// expire the job if all associated cars are outside the job destruction range
-					// the base method's logic will handle generating the expired report
-					StationJobGenerationRange stationRange = Traverse.Create(stationController)
-						.Field("stationRange")
-						.GetValue<StationJobGenerationRange>();
-					if (!job.tasks.Any(CheckTaskForCarsInRange(stationRange)))
+					// for shunting load jobs, don't require player to spot the train on a track after loading
+					if (job.jobType == JobType.ShuntingLoad)
 					{
-						job.ExpireJob();
+						ReplaceShuntingLoadDestination(job);
 					}
 				}
 				catch (Exception e)
@@ -347,29 +390,92 @@ namespace PersistentJobsMod
 					));
 					OnCriticalFailure();
 				}
+				return true;
 			}
 
-			private static Func<Task, bool> CheckTaskForCarsInRange(StationJobGenerationRange stationRange)
+			private static void ReplaceShuntingLoadDestination(Job job)
 			{
-				return (Task t) =>
+				Debug.Log("[PersistentJobs] attempting to replace destination track with warehouse track...");
+				SequentialTasks sequence = job.tasks[0] as SequentialTasks;
+				if (sequence == null)
 				{
-					if (t is ParallelTasks || t is SequentialTasks)
-					{
-						return Traverse.Create(t)
-							.Field("tasks")
-							.GetValue<IEnumerable<Task>>()
-							.Any(CheckTaskForCarsInRange(stationRange));
-					}
-					List<Car> cars = Traverse.Create(t).Field("cars").GetValue<List<Car>>();
-					Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
-					{
-						TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
-						float distance =
-							(trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
-						return trainCar != null && distance <= initialDistanceRegular;
-					});
-					return carInRangeOfStation != null;
-				};
+					Debug.LogError("    couldn't find sequential task!");
+					return;
+				}
+
+				LinkedList<Task> tasks = Traverse.Create(sequence)
+					.Field("tasks")
+					.GetValue<LinkedList<Task>>();
+
+				if (tasks == null)
+				{
+					Debug.LogError("    couldn't find child tasks!");
+					return;
+				}
+
+				LinkedListNode<Task> cursor = tasks.First;
+
+				if (cursor == null)
+				{
+					Debug.LogError("    first task in sequence was null!");
+					return;
+				}
+
+				while (cursor != null && Utilities.TaskAnyDFS(
+					cursor.Value,
+					t => t.InstanceTaskType != TaskType.Warehouse))
+				{
+					Debug.Log("    searching for warehouse task...");
+					cursor = cursor.Next;
+				}
+
+				if (cursor == null)
+				{
+					Debug.LogError("    couldn't find warehouse task!");
+					return;
+				}
+
+				// cursor points at the parallel task of warehouse tasks
+				// replace the destination track of all following tasks with the warehouse track
+				WarehouseTask wt = (Utilities.TaskFindDFS(
+					cursor.Value,
+					t => t.InstanceTaskType == TaskType.Warehouse) as WarehouseTask);
+				WarehouseMachine wm = wt != null ? wt.warehouseMachine : null;
+
+				if (wm == null)
+				{
+					Debug.LogError("    couldn't find warehouse machine!");
+					return;
+				}
+
+				while ((cursor = cursor.Next) != null)
+				{
+					Debug.Log("    replace destination tracks...");
+					Utilities.TaskDoDFS(
+						cursor.Value,
+						t => Traverse.Create(t).Field("destinationTrack").SetValue(wm.WarehouseTrack));
+				}
+
+				Debug.Log("    done!");
+			}
+
+			private static bool AreTaskCarsInRange(Task task, StationJobGenerationRange stationRange)
+			{
+				List<Car> cars = Traverse.Create(task).Field("cars").GetValue<List<Car>>();
+				Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
+				{
+					TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
+					float distance =
+						(trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
+					return trainCar != null && distance <= initialDistanceRegular;
+				});
+				return carInRangeOfStation != null;
+			}
+
+			private static bool IsAnyTaskCarOnTrack(Task task, Track track)
+			{
+				List<Car> cars = Traverse.Create(task).Field("cars").GetValue<List<Car>>();
+				return cars.Any(car => car.CurrentTrack == track);
 			}
 
 			private static void ReserveOrReplaceRequiredTracks(JobChainController jobChainController)
@@ -440,7 +546,7 @@ namespace PersistentJobsMod
 								// update task data
 								foreach(Task task in key.job.tasks)
 								{
-									Utilities.CrawlTaskDFS(task, t =>
+									Utilities.TaskDoDFS(task, t =>
 									{
 										if (t is TransportTask)
 										{
