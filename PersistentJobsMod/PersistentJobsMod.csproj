@@ -85,6 +85,7 @@
     <Compile Include="ShuntingLoadJobProceduralGenerator.cs" />
     <Compile Include="ShuntingUnloadJobProceduralGenerator.cs" />
     <Compile Include="TransportJobProceduralGenerator.cs" />
+    <Compile Include="UnusedTrainCarDeleterPatch.cs" />
     <Compile Include="Utilities.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
