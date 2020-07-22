@@ -29,7 +29,7 @@ namespace PersistentJobsMod
 							return false;
 						}
 
-						Debug.Log("[PersistentJobs] collecting deletion candidates");
+						Debug.Log("[PersistentJobs] collecting deletion candidates...");
 						List<TrainCar> trainCarsToDelete = new List<TrainCar>();
 						for (int i = ___unusedTrainCarsMarkedForDelete.Count - 1; i >= 0; i--)
 						{
@@ -57,7 +57,7 @@ namespace PersistentJobsMod
 
 						// ------ BEGIN JOB GENERATION ------
 						// group trainCars by trainset
-						Debug.Log("[PersistentJobs] grouping trainCars by trainSet");
+						Debug.Log("[PersistentJobs] grouping trainCars by trainSet...");
 						List<TrainCar> nonLocoTrainCarsToDelete
 							= trainCarsToDelete.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType)).ToList();
 						List<TrainCar> emptyNonLocoTrainCarsToDelete = nonLocoTrainCarsToDelete
@@ -73,26 +73,28 @@ namespace PersistentJobsMod
 						Dictionary<Trainset, List<TrainCar>> loadedTrainCarsPerTrainSet = JobProceduralGenerationUtilities
 							.GroupTrainCarsByTrainset(loadedNonLocoTrainCarsToDelete);
 						Debug.Log(
-							$"[PersistentJobs] found {emptyTrainCarsPerTrainSet.Count} empty trainSets\n" +
+							$"[PersistentJobs]\n" +
+							$"    found {emptyTrainCarsPerTrainSet.Count} empty trainSets\n" +
 							$"    and {loadedTrainCarsPerTrainSet.Count} loaded trainSets");
 
 						// group trainCars sets by nearest stationController
-						Debug.Log("[PersistentJobs] grouping trainSets by nearest station");
+						Debug.Log("[PersistentJobs] grouping trainSets by nearest station...");
 						Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> emptyCgsPerTcsPerSc
 							= JobProceduralGenerationUtilities.GroupTrainCarSetsByNearestStation(emptyTrainCarsPerTrainSet);
 						Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> loadedCgsPerTcsPerSc
 							= JobProceduralGenerationUtilities.GroupTrainCarSetsByNearestStation(loadedTrainCarsPerTrainSet);
 						Debug.Log(
-							$"[PersistentJobs] found {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n" +
+							$"[PersistentJobs]\n" +
+							$"    found {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n" +
 							$"    and {loadedCgsPerTcsPerSc.Count} stations for loaded trainSets");
 
 						// populate possible cargoGroups per group of trainCars
-						Debug.Log("[PersistentJobs] populating cargoGroups");
+						Debug.Log("[PersistentJobs] populating cargoGroups...");
 						JobProceduralGenerationUtilities.PopulateCargoGroupsPerTrainCarSet(emptyCgsPerTcsPerSc);
 						JobProceduralGenerationUtilities.PopulateCargoGroupsPerLoadedTrainCarSet(loadedCgsPerTcsPerSc);
 
 						// pick new jobs for the trainCars at each station
-						Debug.Log("[PersistentJobs] picking jobs");
+						Debug.Log("[PersistentJobs] picking jobs...");
 						System.Random rng = new System.Random(Environment.TickCount);
 						List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
 							shuntingLoadJobInfos = ShuntingLoadJobProceduralGenerator
@@ -122,12 +124,13 @@ namespace PersistentJobsMod
 									.ToDictionary(tpl => tpl.Item1, tpl => tpl.Item2),
 								rng);
 						Debug.Log(
-							$"[PersistentJobs] chose {shuntingLoadJobInfos.Count} shunting load jobs,\n" +
+							$"[PersistentJobs]\n" +
+							$"    chose {shuntingLoadJobInfos.Count} shunting load jobs,\n" +
 							$"    {transportJobInfos.Count} transport jobs,\n" +
 							$"    and {shuntingUnloadJobInfos.Count} shunting unload jobs");
 
 						// try to generate jobs
-						Debug.Log("[PersistentJobs] generating jobs");
+						Debug.Log("[PersistentJobs] generating jobs...");
 						IEnumerable<JobChainController> shuntingLoadJobChainControllers
 							= ShuntingLoadJobProceduralGenerator.doJobGeneration(shuntingLoadJobInfos, rng);
 						IEnumerable<JobChainController> transportJobChainControllers
@@ -135,12 +138,13 @@ namespace PersistentJobsMod
 						IEnumerable<JobChainController> shuntingUnloadJobChainControllers
 							= ShuntingUnloadJobProceduralGenerator.doJobGeneration(shuntingUnloadJobInfos, rng);
 						Debug.Log(
-							$"[PersistentJobs] generated {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
+							$"[PersistentJobs]\n" +
+							$"    generated {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
 							$"    {transportJobChainControllers.Where(jcc => jcc != null).Count()} transport jobs,\n" +
 							$"    and {shuntingUnloadJobChainControllers.Where(jcc => jcc != null).Count()} shunting unload jobs");
 
 						// finalize jobs & preserve job train cars
-						Debug.Log("[PersistentJobs] finalizing jobs");
+						Debug.Log("[PersistentJobs] finalizing jobs...");
 						int totalCarsPreserved = 0;
 						foreach (JobChainController jcc in shuntingLoadJobChainControllers)
 						{
@@ -189,7 +193,7 @@ namespace PersistentJobsMod
 						}
 
 						// preserve all trainCars that are not locos
-						Debug.Log("[PersistentJobs] preserving cars");
+						Debug.Log("[PersistentJobs] preserving cars...");
 						foreach (TrainCar tc in new List<TrainCar>(trainCarsToDelete))
 						{
 							if (tc.playerSpawnedCar || !CarTypes.IsAnyLocomotiveOrTender(tc.carType))
@@ -202,6 +206,7 @@ namespace PersistentJobsMod
 						Debug.Log($"[PersistentJobs] preserved {totalCarsPreserved} cars");
 						// ------ END JOB GENERATION ------
 
+						Debug.Log("[PersistentJobs] deleting cars...");
 						foreach (TrainCar tc in trainCarsToDelete)
 						{
 							___unusedTrainCarsMarkedForDelete.Remove(tc);
@@ -280,7 +285,7 @@ namespace PersistentJobsMod
 					Main.OnCriticalFailure();
 				}
 
-				Debug.Log("[PersistentJobs] collecting deletion candidates (coroutine)");
+				Debug.Log("[PersistentJobs] collecting deletion candidates... (coroutine)");
 				try
 				{
 					trainCarCandidatesForDelete.Clear();
@@ -315,7 +320,7 @@ namespace PersistentJobsMod
 
 				// ------ BEGIN JOB GENERATION ------
 				// group trainCars by trainset
-				Debug.Log("[PersistentJobs] grouping trainCars by trainSet (coroutine)");
+				Debug.Log("[PersistentJobs] grouping trainCars by trainSet... (coroutine)");
 				Dictionary<Trainset, List<TrainCar>> emptyTrainCarsPerTrainSet = null;
 				Dictionary<Trainset, List<TrainCar>> loadedTrainCarsPerTrainSet = null;
 				try
@@ -344,13 +349,14 @@ namespace PersistentJobsMod
 					Main.OnCriticalFailure();
 				}
 				Debug.Log(
-					$"[PersistentJobs] found {emptyTrainCarsPerTrainSet.Count} empty trainSets\n" +
+					$"[PersistentJobs]\n" +
+					$"    found {emptyTrainCarsPerTrainSet.Count} empty trainSets\n" +
 					$"    and {loadedTrainCarsPerTrainSet.Count} loaded trainSets (coroutine)");
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// group trainCars sets by nearest stationController
-				Debug.Log("[PersistentJobs] grouping trainSets by nearest station (coroutine)");
+				Debug.Log("[PersistentJobs] grouping trainSets by nearest station... (coroutine)");
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> emptyCgsPerTcsPerSc = null;
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> loadedCgsPerTcsPerSc = null;
 				try
@@ -367,13 +373,14 @@ namespace PersistentJobsMod
 					Main.OnCriticalFailure();
 				}
 				Debug.Log(
-					$"[PersistentJobs] found {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n" +
+					$"[PersistentJobs]\n" +
+					$"    found {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n" +
 					$"    and {loadedCgsPerTcsPerSc.Count} stations for loaded trainSets (coroutine)");
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// populate possible cargoGroups per group of trainCars
-				Debug.Log("[PersistentJobs] populating cargoGroups (coroutine)");
+				Debug.Log("[PersistentJobs] populating cargoGroups... (coroutine)");
 				try
 				{
 					JobProceduralGenerationUtilities.PopulateCargoGroupsPerTrainCarSet(emptyCgsPerTcsPerSc);
@@ -389,7 +396,7 @@ namespace PersistentJobsMod
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// pick new jobs for the trainCars at each station
-				Debug.Log("[PersistentJobs] picking jobs (coroutine)");
+				Debug.Log("[PersistentJobs] picking jobs... (coroutine)");
 				System.Random rng = new System.Random(Environment.TickCount);
 				List<(StationController, List<CarsPerTrack>, StationController, List<TrainCar>, List<CargoType>)>
 					shuntingLoadJobInfos = null;
@@ -433,14 +440,15 @@ namespace PersistentJobsMod
 					Main.OnCriticalFailure();
 				}
 				Debug.Log(
-					$"[PersistentJobs] chose {shuntingLoadJobInfos.Count} shunting load jobs,\n" +
+					$"[PersistentJobs]\n" +
+					$"    chose {shuntingLoadJobInfos.Count} shunting load jobs,\n" +
 					$"    {transportJobInfos.Count} transport jobs,\n" +
 					$"    and {shuntingUnloadJobInfos.Count} shunting unload jobs (coroutine)");
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// try to generate jobs
-				Debug.Log("[PersistentJobs] generating jobs (coroutine)");
+				Debug.Log("[PersistentJobs] generating jobs... (coroutine)");
 				IEnumerable<JobChainController> shuntingLoadJobChainControllers = null;
 				IEnumerable<JobChainController> transportJobChainControllers = null;
 				IEnumerable<JobChainController> shuntingUnloadJobChainControllers = null;
@@ -460,14 +468,15 @@ namespace PersistentJobsMod
 					Main.OnCriticalFailure();
 				}
 				Debug.Log(
-					$"[PersistentJobs] generated {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
+					$"[PersistentJobs]\n" +
+					$"    generated {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
 					$"    {transportJobChainControllers.Where(jcc => jcc != null).Count()} transport jobs,\n" +
 					$"    and {shuntingUnloadJobChainControllers.Where(jcc => jcc != null).Count()} shunting unload jobs (coroutine)");
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// finalize jobs & preserve job train cars
-				Debug.Log("[PersistentJobs] finalizing jobs (coroutine)");
+				Debug.Log("[PersistentJobs] finalizing jobs... (coroutine)");
 				int totalCarsPreserved = 0;
 				try
 				{
@@ -529,7 +538,7 @@ namespace PersistentJobsMod
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// preserve all trainCars that are not locomotives
-				Debug.Log("[PersistentJobs] preserving cars (coroutine)");
+				Debug.Log("[PersistentJobs] preserving cars... (coroutine)");
 				try
 				{
 					foreach (TrainCar tc in new List<TrainCar>(trainCarCandidatesForDelete))
@@ -553,7 +562,7 @@ namespace PersistentJobsMod
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
-				Debug.Log("[PersistentJobs] deleting cars (coroutine)");
+				Debug.Log("[PersistentJobs] deleting cars... (coroutine)");
 				try
 				{
 					trainCarsToDelete.Clear();
