@@ -44,6 +44,7 @@ namespace PersistentJobsMod
 								.GetValue<bool>(trainCar);
 							if (areDeleteConditionsFulfilled)
 							{
+								___unusedTrainCarsMarkedForDelete.RemoveAt(i);
 								trainCarsToDelete.Add(trainCar);
 							}
 						}
@@ -176,6 +177,7 @@ namespace PersistentJobsMod
 							if (tc.playerSpawnedCar || !CarTypes.IsAnyLocomotiveOrTender(tc.carType))
 							{
 								trainCarsToDelete.Remove(tc);
+								___unusedTrainCarsMarkedForDelete.Add(tc);
 								totalCarsPreserved += 1;
 							}
 						}
