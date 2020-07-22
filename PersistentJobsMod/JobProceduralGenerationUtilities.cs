@@ -115,6 +115,36 @@ namespace PersistentJobsMod
 			}
 		}
 
+		public static Dictionary<StationController, List<List<TrainCar>>> ExtractEmptyHaulTrainSets(
+			Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc)
+		{
+			Dictionary<StationController, List<List<TrainCar>>> tcsPerSc
+				= new Dictionary<StationController, List<List<TrainCar>>>();
+
+			foreach (StationController sc in cgsPerTcsPerSc.Keys)
+			{
+				// need to copy the list for iteration b/c we'll be editing the list during iteration
+				var cgsPerTcsCopy = new List<(List<TrainCar>, List<CargoGroup>)>(cgsPerTcsPerSc[sc]);
+				foreach ((List<TrainCar>, List<CargoGroup>) cgsPerTcs in cgsPerTcsCopy)
+				{
+					// no cargo groups indicates a train car type that cannot carry cargo from its nearest station
+					// extract it to have an empty haul job generated for it
+					if (cgsPerTcs.Item2.Count == 0)
+					{
+						if (!tcsPerSc.ContainsKey(sc))
+						{
+							tcsPerSc.Add(sc, new List<List<TrainCar>>());
+						}
+
+						tcsPerSc[sc].Add(cgsPerTcs.Item1);
+						cgsPerTcsPerSc[sc].Remove(cgsPerTcs);
+					}
+				}
+			}
+
+			return tcsPerSc;
+		}
+
 		public static void PopulateCargoGroupsPerLoadedTrainCarSet(
 			Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> cgsPerTcsPerSc)
 		{
