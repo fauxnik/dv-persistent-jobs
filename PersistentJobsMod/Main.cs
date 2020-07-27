@@ -20,9 +20,9 @@ namespace PersistentJobsMod
 		private static float initialDistanceAnyJobTaken = 0f;
 		private static List<string> stationIdSpawnBlockList = new List<string>();
 
-		private static readonly string SAVE_DATA_PRIMARY_KEY = "Mod_Persistent_Jobs";
-		private static readonly string SAVE_DATA_VERSION_KEY = "version";
-		private static readonly string SAVE_DATA_SPAWN_BLOCK_KEY = "spawn_block";
+		private static readonly string SAVE_DATA_PRIMARY_KEY = "PersistentJobsMod";
+		private static readonly string SAVE_DATA_VERSION_KEY = "Version";
+		private static readonly string SAVE_DATA_SPAWN_BLOCK_KEY = "SpawnBlockList";
 
 #if DEBUG
 		private static float PERIOD = 60f;
@@ -121,7 +121,7 @@ namespace PersistentJobsMod
 
 					JObject saveData = new JObject(
 						new JProperty(SAVE_DATA_VERSION_KEY, new JValue(modEntry.Version.ToString())),
-						new JProperty(SAVE_DATA_SPAWN_BLOCK_KEY, spawnBlockSaveData));
+						new JProperty($"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}", spawnBlockSaveData));
 
 					SaveGameManager.data.SetJObject(SAVE_DATA_PRIMARY_KEY, saveData);
 				}
@@ -148,7 +148,7 @@ namespace PersistentJobsMod
 						return;
 					}
 
-					JArray spawnBlockSaveData = (JArray)saveData[SAVE_DATA_SPAWN_BLOCK_KEY];
+					JArray spawnBlockSaveData = (JArray)saveData[$"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}"];
 
 					if (spawnBlockSaveData == null)
 					{
