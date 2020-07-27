@@ -493,9 +493,13 @@ namespace PersistentJobsMod
 						{
 							Track reservedTrack = trackReservations[j].track;
 							float reservedLength = trackReservations[j].reservedLength;
-							if (!YardTracksOrganizer.Instance.ReserveSpace(reservedTrack, reservedLength))
+							if (YardTracksOrganizer.Instance.GetFreeSpaceOnTrack(reservedTrack) >= reservedLength)
 							{
-								// reservation unsuccessful; find a different track with enough space & update job data
+								YardTracksOrganizer.Instance.ReserveSpace(reservedTrack, reservedLength, false);
+							}
+							else
+							{
+								// not enough space to reserve; find a different track with enough space & update job data
 								Track replacementTrack = GetReplacementTrack(reservedTrack, reservedLength);
 								if (replacementTrack == null)
 								{
@@ -505,7 +509,7 @@ namespace PersistentJobsMod
 									continue;
 								}
 
-								YardTracksOrganizer.Instance.ReserveSpace(replacementTrack, reservedLength);
+								YardTracksOrganizer.Instance.ReserveSpace(replacementTrack, reservedLength, false);
 
 								// update reservation data
 								trackReservations.RemoveAt(j);
