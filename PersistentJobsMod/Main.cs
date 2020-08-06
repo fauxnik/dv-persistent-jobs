@@ -133,7 +133,8 @@ namespace PersistentJobsMod
 			}
 		}
 
-		[HarmonyPatch(typeof(SaveGameManager), "Load")]
+		// patch CarsSaveManager.Load to ensure CarsSaveManager.TracksHash exists
+		[HarmonyPatch(typeof(CarsSaveManager), "Load")]
 		class SaveGameManager_Load_Patch
 		{
 			static void Postfix(SaveGameManager __instance)
