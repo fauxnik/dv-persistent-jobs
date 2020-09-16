@@ -538,10 +538,34 @@ namespace PersistentJobsMod
 								}
 								else
 								{
-									throw new ArgumentOutOfRangeException(string.Format(
-										"[PersistentJobs] Unaccounted for JobType[{1}] encountered while reserving track space for Job[{0}].",
-										key.job.ID,
-										key.job.jobType));
+									// attempt to replace track via Traverse for unknown job types
+									bool replacedDestination = false;
+                                    try
+                                    {
+										var destinationTrackField = Traverse.Create(key).Field("destinationTrack");
+										var carsPerDestinationTrackField = Traverse.Create(key).Field("carsPerDestinationTrack");
+										if (destinationTrackField.FieldExists())
+                                        {
+											destinationTrackField.SetValue(replacementTrack);
+											replacedDestination = true;
+                                        }
+										else if (carsPerDestinationTrackField.FieldExists())
+                                        {
+											carsPerDestinationTrackField.SetValue(
+												carsPerDestinationTrackField.GetValue<List<CarsPerTrack>>()
+												.Select(cpt => cpt.track == reservedTrack ? new CarsPerTrack(replacementTrack, cpt.cars) : cpt)
+												.ToList());
+											replacedDestination = true;
+                                        }
+                                    }
+									catch (Exception e) { Debug.LogError(e); }
+									if (!replacedDestination)
+									{
+										Debug.LogError(string.Format(
+											"[PersistentJobs] Unaccounted for JobType[{1}] encountered while reserving track space for Job[{0}].",
+											key.job.ID,
+											key.job.jobType));
+									}
 								}
 
 								// update task data
