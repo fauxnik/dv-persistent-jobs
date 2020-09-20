@@ -5,5 +5,6 @@
 	"Version": "2.4.1",
 	"AssemblyName": "PersistentJobsMod.dll",
 	"EntryMethod": "PersistentJobsMod.Main.Load",
+	"LoadAfter": [ "PassengerJobs" ],
 	"Repository": "https://raw.githubusercontent.com/fauxnik/DerailValleyPersistentJobsMod/master/Repository.json"
 }
