@@ -10,6 +10,19 @@ namespace PersistentJobsMod
 {
 	class Utilities
 	{
+		public static bool IsPassengerCar(TrainCarType carType)
+		{
+			switch (carType)
+			{
+				case TrainCarType.PassengerBlue:
+				case TrainCarType.PassengerGreen:
+				case TrainCarType.PassengerRed:
+					return true;
+				default:
+					return false;
+			}
+		}
+
 		public static void ConvertPlayerSpawnedTrainCar(TrainCar trainCar)
 		{
 			if (!trainCar.playerSpawnedCar) return;

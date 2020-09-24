@@ -1,7 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System;
 using UnityEngine;
 using DV.Logic.Job;
+using Harmony12;
 
 namespace PersistentJobsMod
 {
@@ -186,6 +188,60 @@ namespace PersistentJobsMod
 					}
 				}
 			}
+		}
+
+		public static List<JobChainController> TryToGeneratePassengerJobs(Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> tcsPerSc)
+        {
+			if (Main.paxEntry?.Active != true) { return new List<JobChainController>(); }
+
+			var created = new List<JobChainController>();
+			foreach (StationController sc in tcsPerSc.Keys)
+			{
+				var generator = sc.ProceduralJobsController.gameObject
+					.GetComponent(Main.paxEntry.Assembly.GetType("PassengerJobsMod.PassengerJobGenerator"));
+				var generatorTraverse = Traverse.Create(generator);
+				// TODO: create a logistic haul to a randomly selected passenger station instead
+				if (generator == null) { continue; }
+
+				foreach (var cgsPerTcs in tcsPerSc[sc])
+                {
+					try
+					{
+						var tcs = cgsPerTcs.Item1;
+						var track = tcs[0].logicCar.CurrentTrack;
+						object tcsPerLt = AccessTools.Constructor(
+								Main.paxEntry.Assembly.GetType("PassengerJobsMod.TrainCarsPerLogicTrack"),
+								new Type[] { typeof(Track), typeof(IEnumerable<TrainCar>) })
+							.Invoke(new object[] { track, tcs });
+						var isCommuter = tcs.Count <= generatorTraverse.Field("MAX_CARS_COMMUTE").GetValue<int>();
+
+						// convert player spawned cars; DV will complain if we don't do this
+						// unfortunately we must do this before attempting generation b/c the generate methods call jcc.finalize
+						foreach (var tc in tcs)
+                        {
+							Utilities.ConvertPlayerSpawnedTrainCar(tc);
+                        }
+
+						JobChainController jcc;
+						if (isCommuter)
+						{
+							jcc = generatorTraverse.Method("GenerateNewCommuterRun", new object[] { tcsPerLt }).GetValue<JobChainController>();
+						}
+						else
+						{
+							jcc = generatorTraverse.Method("GenerateNewTransportJob", new object[] { tcsPerLt }).GetValue<JobChainController>();
+						}
+
+						if (jcc != null) { created.Add(jcc); }
+					}
+					catch (Exception e)
+                    {
+						Main.modEntry.Logger.Error($"Error while trying to create passenger job:\n{e}");
+                    }
+                }
+			}
+
+			return created;
 		}
 	}
 }
