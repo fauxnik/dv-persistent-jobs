@@ -1,9 +1,10 @@
 ﻿using Harmony12;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace PersistentJobsMod
 {
-	class PJModSettings_PurgeData_Patch
+	static class PJModSettings_PurgeData_Patch
 	{
 		static void Postfix()
 		{
@@ -12,7 +13,7 @@ namespace PersistentJobsMod
 		}
 	}
 
-	class PassengerJobGenerator_StartGenerationAsync_Patch
+	static class PassengerJobGenerator_StartGenerationAsync_Patch
 	{
 		static bool Prefix(object __instance)
 		{
@@ -35,4 +36,15 @@ namespace PersistentJobsMod
 			}
 		}
 	}
+
+	static class CarSpawner_DeleteTrainCars_Replacer
+    {
+		static void NoOp(List<TrainCar> trainCarsToDelete, bool forceInstantDestroy = false) { }
+		static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+			return instructions.MethodReplacer(
+				AccessTools.Method(typeof(CarSpawner), "DeleteTrainCars"),
+				AccessTools.Method(typeof(CarSpawner_DeleteTrainCars_Replacer), "NoOp"));
+        }
+    }
 }

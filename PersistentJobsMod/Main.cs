@@ -116,6 +116,7 @@ namespace PersistentJobsMod
 			Debug.Log("Patching PassengerJobsMod...");
 			try
 			{
+				// spawn block list handling for passenger jobs
 				Type paxJobGen = paxMod.Assembly.GetType("PassengerJobsMod.PassengerJobGenerator", true);
 				var StartGenAsync = AccessTools.Method(paxJobGen, "StartGenerationAsync");
 				var StartGenAsyncPrefix = AccessTools.Method(typeof(PassengerJobGenerator_StartGenerationAsync_Patch), "Prefix");
@@ -125,6 +126,18 @@ namespace PersistentJobsMod
 				var PurgeData = AccessTools.Method(paxJobSettings, "PurgeData");
 				var PurgeDataPostfix = AccessTools.Method(typeof(PJModSettings_PurgeData_Patch), "Postfix");
 				harmony.Patch(PurgeData, postfix: new HarmonyMethod(PurgeDataPostfix));
+
+				// train car preservation
+				Type paxCommuterCtrl = paxMod.Assembly.GetType("PassengerJobsMod.CommuterChainController", true);
+				var LastJobInChainComplete_Commuter = AccessTools.Method(paxCommuterCtrl, "OnLastJobInChainCompleted");
+				var ReplaceDeleteTrainCars = AccessTools.Method(typeof(CarSpawner_DeleteTrainCars_Replacer), "Transpiler");
+				harmony.Patch(LastJobInChainComplete_Commuter, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
+				Type paxExpressCtrl = paxMod.Assembly.GetType("PassengerJobsMod.PassengerTransportChainController", true);
+				var LastJobInChainComplete_Express = AccessTools.Method(paxExpressCtrl, "OnLastJobInChainComplete");
+				harmony.Patch(LastJobInChainComplete_Express, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
+				Type paxAbandonPatch = paxMod.Assembly.GetType("PassengerJobsMod.JCC_OnJobAbandoned_Patch");
+				var OnAnyJobFromChainAbandonedPrefix = AccessTools.Method("Prefix");
+				harmony.Patch(OnAnyJobFromChainAbandonedPrefix, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 			}
 			catch (Exception e) { Debug.LogError($"Failed to patch PassengerJobsMod!\n{e}"); }
         }
