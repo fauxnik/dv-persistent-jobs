@@ -8,21 +8,25 @@ using UnityEngine;
 using UnityModManagerNet;
 using DV.Logic.Job;
 using DV.ServicePenalty;
+using System.IO;
 
 namespace PersistentJobsMod
 {
 	static class Main
 	{
 		public static UnityModManager.ModEntry modEntry;
+		public static UnityModManager.ModEntry paxEntry;
 		private static bool isModBroken = false;
 		private static bool overrideTrackReservation = false;
 		private static float initialDistanceRegular = 0f;
 		private static float initialDistanceAnyJobTaken = 0f;
-		private static List<string> stationIdSpawnBlockList = new List<string>();
+		public static List<string> stationIdSpawnBlockList = new List<string>();
+		public static List<string> stationIdPassengerBlockList = new List<string>();
 
 		private static readonly string SAVE_DATA_PRIMARY_KEY = "PersistentJobsMod";
 		private static readonly string SAVE_DATA_VERSION_KEY = "Version";
 		private static readonly string SAVE_DATA_SPAWN_BLOCK_KEY = "SpawnBlockList";
+		private static readonly string SAVE_DATA_PASSENGER_BLOCK_KEY = "PassengerBlockList";
 
 #if DEBUG
 		private static float PERIOD = 60f;
@@ -33,10 +37,18 @@ namespace PersistentJobsMod
 
 		static void Load(UnityModManager.ModEntry modEntry)
 		{
+			Main.modEntry = modEntry;
+
 			var harmony = HarmonyInstance.Create(modEntry.Info.Id);
 			harmony.PatchAll(Assembly.GetExecutingAssembly());
+
+			paxEntry = UnityModManager.FindMod("PassengerJobs");
+			if (paxEntry?.Active == true)
+            {
+				PatchPassengerJobsMod(paxEntry, harmony);
+            }
+
 			modEntry.OnToggle = OnToggle;
-			Main.modEntry = modEntry;
 		}
 
 		static bool OnToggle(UnityModManager.ModEntry modEntry, bool isTogglingOn)
@@ -99,6 +111,37 @@ namespace PersistentJobsMod
 			}
 		}
 
+		static void PatchPassengerJobsMod(UnityModManager.ModEntry paxMod, HarmonyInstance harmony)
+        {
+			Debug.Log("Patching PassengerJobsMod...");
+			try
+			{
+				// spawn block list handling for passenger jobs
+				Type paxJobGen = paxMod.Assembly.GetType("PassengerJobsMod.PassengerJobGenerator", true);
+				var StartGenAsync = AccessTools.Method(paxJobGen, "StartGenerationAsync");
+				var StartGenAsyncPrefix = AccessTools.Method(typeof(PassengerJobGenerator_StartGenerationAsync_Patch), "Prefix");
+				var StartGenAsyncPostfix = AccessTools.Method(typeof(PassengerJobGenerator_StartGenerationAsync_Patch), "Postfix");
+				harmony.Patch(StartGenAsync, prefix: new HarmonyMethod(StartGenAsyncPrefix), postfix: new HarmonyMethod(StartGenAsyncPostfix));
+				Type paxJobSettings = paxMod.Assembly.GetType("PassengerJobsMod.PJModSettings", true);
+				var PurgeData = AccessTools.Method(paxJobSettings, "PurgeData");
+				var PurgeDataPostfix = AccessTools.Method(typeof(PJModSettings_PurgeData_Patch), "Postfix");
+				harmony.Patch(PurgeData, postfix: new HarmonyMethod(PurgeDataPostfix));
+
+				// train car preservation
+				Type paxCommuterCtrl = paxMod.Assembly.GetType("PassengerJobsMod.CommuterChainController", true);
+				var LastJobInChainComplete_Commuter = AccessTools.Method(paxCommuterCtrl, "OnLastJobInChainCompleted");
+				var ReplaceDeleteTrainCars = AccessTools.Method(typeof(CarSpawner_DeleteTrainCars_Replacer), "Transpiler");
+				harmony.Patch(LastJobInChainComplete_Commuter, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
+				Type paxExpressCtrl = paxMod.Assembly.GetType("PassengerJobsMod.PassengerTransportChainController", true);
+				var LastJobInChainComplete_Express = AccessTools.Method(paxExpressCtrl, "OnLastJobInChainComplete");
+				harmony.Patch(LastJobInChainComplete_Express, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
+				Type paxAbandonPatch = paxMod.Assembly.GetType("PassengerJobsMod.JCC_OnJobAbandoned_Patch");
+				var OnAnyJobFromChainAbandonedPrefix = AccessTools.Method("Prefix");
+				harmony.Patch(OnAnyJobFromChainAbandonedPrefix, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
+			}
+			catch (Exception e) { Debug.LogError($"Failed to patch PassengerJobsMod!\n{e}"); }
+        }
+
 		public static void OnCriticalFailure()
 		{
 			isModBroken = true;
@@ -107,7 +150,7 @@ namespace PersistentJobsMod
 			modEntry.Logger.Warning("You can reactivate PersistentJobs by restarting the game, but this failure " +
 				"type likely indicates an incompatibility between the mod and a recent game update. Please search the " +
 				"mod's Github issue tracker for a relevant report. If none is found, please open one. Include the " +
-				"exception message printed above and your game's current build number.");
+				$"exception message printed above and your game's current build number (likely {UnityModManager.gameVersion}).");
 		}
 
 		[HarmonyPatch(typeof(SaveGameManager), "Save")]
@@ -118,10 +161,12 @@ namespace PersistentJobsMod
 				try
 				{
 					JArray spawnBlockSaveData = new JArray(from id in stationIdSpawnBlockList select new JValue(id));
+					JArray passengerBlockSaveData = new JArray(from id in stationIdPassengerBlockList select new JValue(id));
 
 					JObject saveData = new JObject(
 						new JProperty(SAVE_DATA_VERSION_KEY, new JValue(modEntry.Version.ToString())),
-						new JProperty($"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}", spawnBlockSaveData));
+						new JProperty($"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}", spawnBlockSaveData),
+						new JProperty($"{SAVE_DATA_PASSENGER_BLOCK_KEY}#{CarsSaveManager.TracksHash}", passengerBlockSaveData));
 
 					SaveGameManager.data.SetJObject(SAVE_DATA_PRIMARY_KEY, saveData);
 				}
@@ -145,22 +190,25 @@ namespace PersistentJobsMod
 
 					if (saveData == null)
 					{
-						modEntry.Logger.Log("Not loading save data: primary object was null.");
+						modEntry.Logger.Log("Not loading save data: primary object is null.");
 						return;
 					}
 
 					JArray spawnBlockSaveData = (JArray)saveData[$"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}"];
-
-					if (spawnBlockSaveData == null)
+					if (spawnBlockSaveData == null) { modEntry.Logger.Log("Not loading spawn block list: data is null."); }
+					else
 					{
-						modEntry.Logger.Log("Not loading spawn block list: data was null.");
-						return;
+						stationIdSpawnBlockList = spawnBlockSaveData.Select(id => (string)id).ToList();
+						modEntry.Logger.Log($"Loaded station spawn block list: [ {string.Join(", ", stationIdSpawnBlockList)} ]");
 					}
 
-					stationIdSpawnBlockList = spawnBlockSaveData.Select(id => (string)id).ToList();
-					modEntry.Logger.Log(
-						string.Format("Loaded station spawn block list: [ {0} ]",
-						string.Join(", ", stationIdSpawnBlockList)));
+					JArray passengerBlockSaveData = (JArray)saveData[$"{SAVE_DATA_PASSENGER_BLOCK_KEY}#{CarsSaveManager.TracksHash}"];
+					if (passengerBlockSaveData == null) { modEntry.Logger.Log("Not loading passenger spawn block list: data is null."); }
+					else
+                    {
+						stationIdPassengerBlockList = passengerBlockSaveData.Select(id => (string)id).ToList();
+						modEntry.Logger.Log($"Loaded passenger spawn block list: [ {string.Join(", ", stationIdPassengerBlockList)} ]");
+                    }
 				}
 				catch (Exception e)
 				{
@@ -538,10 +586,34 @@ namespace PersistentJobsMod
 								}
 								else
 								{
-									throw new ArgumentOutOfRangeException(string.Format(
-										"[PersistentJobs] Unaccounted for JobType[{1}] encountered while reserving track space for Job[{0}].",
-										key.job.ID,
-										key.job.jobType));
+									// attempt to replace track via Traverse for unknown job types
+									bool replacedDestination = false;
+                                    try
+                                    {
+										var destinationTrackField = Traverse.Create(key).Field("destinationTrack");
+										var carsPerDestinationTrackField = Traverse.Create(key).Field("carsPerDestinationTrack");
+										if (destinationTrackField.FieldExists())
+                                        {
+											destinationTrackField.SetValue(replacementTrack);
+											replacedDestination = true;
+                                        }
+										else if (carsPerDestinationTrackField.FieldExists())
+                                        {
+											carsPerDestinationTrackField.SetValue(
+												carsPerDestinationTrackField.GetValue<List<CarsPerTrack>>()
+												.Select(cpt => cpt.track == reservedTrack ? new CarsPerTrack(replacementTrack, cpt.cars) : cpt)
+												.ToList());
+											replacedDestination = true;
+                                        }
+                                    }
+									catch (Exception e) { Debug.LogError(e); }
+									if (!replacedDestination)
+									{
+										Debug.LogError(string.Format(
+											"[PersistentJobs] Unaccounted for JobType[{1}] encountered while reserving track space for Job[{0}].",
+											key.job.ID,
+											key.job.jobType));
+									}
 								}
 
 								// update task data
@@ -675,7 +747,7 @@ namespace PersistentJobsMod
 				}
 			}
 		}
-
+		
 		// generates shunting unload jobs
 		[HarmonyPatch(typeof(StationProceduralJobGenerator), "GenerateInChainJob")]
 		class StationProceduralJobGenerator_GenerateInChainJob_Patch

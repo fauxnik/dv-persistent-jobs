@@ -58,34 +58,40 @@ namespace PersistentJobsMod
 						// ------ BEGIN JOB GENERATION ------
 						// group trainCars by trainset
 						Debug.Log("[PersistentJobs] grouping trainCars by trainSet...");
-						List<TrainCar> nonLocoTrainCarsToDelete
-							= trainCarsToDelete.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType)).ToList();
-						List<TrainCar> emptyNonLocoTrainCarsToDelete = nonLocoTrainCarsToDelete
+						List<TrainCar> paxTrainCars = trainCarsToDelete
+							.Where(tc => Utilities.IsPassengerCar(tc.carType))
+							.ToList();
+						List<TrainCar> nonLocoOrPaxTrainCars = trainCarsToDelete
+							.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType) && !Utilities.IsPassengerCar(tc.carType))
+							.ToList();
+						List<TrainCar> emptyFreightCars = nonLocoOrPaxTrainCars
 							.Where(tc => tc.logicCar.CurrentCargoTypeInCar == CargoType.None
 								|| tc.logicCar.LoadedCargoAmount < 0.001f)
 							.ToList();
-						List<TrainCar> loadedNonLocoTrainCarsToDelete = nonLocoTrainCarsToDelete
+						List<TrainCar> loadedFreightTrainCars = nonLocoOrPaxTrainCars
 							.Where(tc => tc.logicCar.CurrentCargoTypeInCar != CargoType.None
 								&& tc.logicCar.LoadedCargoAmount >= 0.001f)
 							.ToList();
-						Dictionary<Trainset, List<TrainCar>> emptyTrainCarsPerTrainSet
-								= JobProceduralGenerationUtilities.GroupTrainCarsByTrainset(emptyNonLocoTrainCarsToDelete);
-						Dictionary<Trainset, List<TrainCar>> loadedTrainCarsPerTrainSet = JobProceduralGenerationUtilities
-							.GroupTrainCarsByTrainset(loadedNonLocoTrainCarsToDelete);
+						var paxTrainCarsPerTrainSet = JobProceduralGenerationUtilities.GroupTrainCarsByTrainset(paxTrainCars);
+						var emptyTrainCarsPerTrainSet = JobProceduralGenerationUtilities.GroupTrainCarsByTrainset(emptyFreightCars);
+						var loadedTrainCarsPerTrainSet = JobProceduralGenerationUtilities.GroupTrainCarsByTrainset(loadedFreightTrainCars);
 						Debug.Log(
 							$"[PersistentJobs]\n" +
-							$"    found {emptyTrainCarsPerTrainSet.Count} empty trainSets\n" +
+							$"    found {paxTrainCarsPerTrainSet.Count} passenger trainSets,\n" +
+							$"    {emptyTrainCarsPerTrainSet.Count} empty trainSets,\n" +
 							$"    and {loadedTrainCarsPerTrainSet.Count} loaded trainSets");
 
 						// group trainCars sets by nearest stationController
 						Debug.Log("[PersistentJobs] grouping trainSets by nearest station...");
+						var paxTcsPerSc = JobProceduralGenerationUtilities.GroupTrainCarSetsByNearestStation(paxTrainCarsPerTrainSet);
 						Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> emptyCgsPerTcsPerSc
 							= JobProceduralGenerationUtilities.GroupTrainCarSetsByNearestStation(emptyTrainCarsPerTrainSet);
 						Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> loadedCgsPerTcsPerSc
 							= JobProceduralGenerationUtilities.GroupTrainCarSetsByNearestStation(loadedTrainCarsPerTrainSet);
 						Debug.Log(
 							$"[PersistentJobs]\n" +
-							$"    found {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n" +
+							$"    found {paxTcsPerSc.Count} stations for passenger trainSets,\n" +
+							$"    {emptyCgsPerTcsPerSc.Count} stations for empty trainSets,\n" +
 							$"    and {loadedCgsPerTcsPerSc.Count} stations for loaded trainSets");
 
 						// populate possible cargoGroups per group of trainCars
@@ -134,6 +140,7 @@ namespace PersistentJobsMod
 
 						// try to generate jobs
 						Debug.Log("[PersistentJobs] generating jobs...");
+						List<JobChainController> paxJobChainControllers = JobProceduralGenerationUtilities.TryToGeneratePassengerJobs(paxTcsPerSc);
 						IEnumerable<JobChainController> shuntingLoadJobChainControllers
 							= ShuntingLoadJobProceduralGenerator.doJobGeneration(shuntingLoadJobInfos, rng);
 						IEnumerable<JobChainController> transportJobChainControllers
@@ -151,7 +158,8 @@ namespace PersistentJobsMod
 							});
 						Debug.Log(
 							$"[PersistentJobs]\n" +
-							$"    generated {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
+							$"    generated {paxJobChainControllers.Where(jcc => jcc != null).Count()} passenger jobs,\n" +
+							$"    {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
 							$"    {transportJobChainControllers.Where(jcc => jcc != null).Count()} transport jobs,\n" +
 							$"    {shuntingUnloadJobChainControllers.Where(jcc => jcc != null).Count()} shunting unload jobs,\n" +
 							$"    and {emptyHaulJobChainControllers.Where(jcc => jcc != null).Count()} empty haul jobs");
@@ -159,6 +167,18 @@ namespace PersistentJobsMod
 						// finalize jobs & preserve job train cars
 						Debug.Log("[PersistentJobs] finalizing jobs...");
 						int totalCarsPreserved = 0;
+						foreach (var jcc in paxJobChainControllers)
+                        {
+							if (jcc != null)
+                            {
+								jcc.trainCarsForJobChain.ForEach(tc =>
+								{
+									trainCarsToDelete.Remove(tc);
+								});
+								totalCarsPreserved += jcc.trainCarsForJobChain.Count;
+								// generation has already taken care of converting player spawned cars and finalizing the job chain
+                            }
+                        }
 						foreach (JobChainController jcc in shuntingLoadJobChainControllers)
 						{
 							if (jcc != null)
@@ -349,26 +369,32 @@ namespace PersistentJobsMod
 				// ------ BEGIN JOB GENERATION ------
 				// group trainCars by trainset
 				Debug.Log("[PersistentJobs] grouping trainCars by trainSet... (coroutine)");
+				Dictionary<Trainset, List<TrainCar>> paxTrainCarsPerTrainSet = null;
 				Dictionary<Trainset, List<TrainCar>> emptyTrainCarsPerTrainSet = null;
 				Dictionary<Trainset, List<TrainCar>> loadedTrainCarsPerTrainSet = null;
 				try
 				{
-					List<TrainCar> nonLocoTrainCarCandidatesForDelete = trainCarCandidatesForDelete
-						.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType))
+					List<TrainCar> paxTrainCars = trainCarCandidatesForDelete
+						.Where(tc => Utilities.IsPassengerCar(tc.carType))
 						.ToList();
-					List<TrainCar> emptyNonLocoTrainCarCandidatesForDelete = nonLocoTrainCarCandidatesForDelete
+					List<TrainCar> nonLocoOrPaxTrainCars = trainCarCandidatesForDelete
+						.Where(tc => !CarTypes.IsAnyLocomotiveOrTender(tc.carType) && !Utilities.IsPassengerCar(tc.carType))
+						.ToList();
+					List<TrainCar> emptyFreightCars = nonLocoOrPaxTrainCars
 						.Where(tc => tc.logicCar.CurrentCargoTypeInCar == CargoType.None
 							|| tc.logicCar.LoadedCargoAmount < 0.001f)
 						.ToList();
-					List<TrainCar> loadedNonLocoTrainCarCandidatesForDelete = nonLocoTrainCarCandidatesForDelete
+					List<TrainCar> loadedFreightCars = nonLocoOrPaxTrainCars
 						.Where(tc => tc.logicCar.CurrentCargoTypeInCar != CargoType.None
 							&& tc.logicCar.LoadedCargoAmount >= 0.001f)
 						.ToList();
 
+					paxTrainCarsPerTrainSet = JobProceduralGenerationUtilities
+						.GroupTrainCarsByTrainset(paxTrainCars);
 					emptyTrainCarsPerTrainSet = JobProceduralGenerationUtilities
-						.GroupTrainCarsByTrainset(emptyNonLocoTrainCarCandidatesForDelete);
+						.GroupTrainCarsByTrainset(emptyFreightCars);
 					loadedTrainCarsPerTrainSet = JobProceduralGenerationUtilities
-						.GroupTrainCarsByTrainset(loadedNonLocoTrainCarCandidatesForDelete);
+						.GroupTrainCarsByTrainset(loadedFreightCars);
 				}
 				catch (Exception e)
 				{
@@ -378,17 +404,21 @@ namespace PersistentJobsMod
 				}
 				Debug.Log(
 					$"[PersistentJobs]\n" +
-					$"    found {emptyTrainCarsPerTrainSet.Count} empty trainSets\n" +
+					$"    found {paxTrainCarsPerTrainSet.Count} passenger trainSets,\n" +
+					$"    {emptyTrainCarsPerTrainSet.Count} empty trainSets,\n" +
 					$"    and {loadedTrainCarsPerTrainSet.Count} loaded trainSets (coroutine)");
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
 
 				// group trainCars sets by nearest stationController
 				Debug.Log("[PersistentJobs] grouping trainSets by nearest station... (coroutine)");
+				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> paxTcsPerSc = null;
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> emptyCgsPerTcsPerSc = null;
 				Dictionary<StationController, List<(List<TrainCar>, List<CargoGroup>)>> loadedCgsPerTcsPerSc = null;
 				try
 				{
+					paxTcsPerSc = JobProceduralGenerationUtilities
+						.GroupTrainCarSetsByNearestStation(paxTrainCarsPerTrainSet);
 					emptyCgsPerTcsPerSc = JobProceduralGenerationUtilities
 						.GroupTrainCarSetsByNearestStation(emptyTrainCarsPerTrainSet);
 					loadedCgsPerTcsPerSc = JobProceduralGenerationUtilities
@@ -402,7 +432,8 @@ namespace PersistentJobsMod
 				}
 				Debug.Log(
 					$"[PersistentJobs]\n" +
-					$"    found {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n" +
+					$"    found {paxTcsPerSc.Count} stations for passenger trainSets\n," +
+					$"    {emptyCgsPerTcsPerSc.Count} stations for empty trainSets\n," +
 					$"    and {loadedCgsPerTcsPerSc.Count} stations for loaded trainSets (coroutine)");
 
 				yield return WaitFor.SecondsRealtime(interopPeriod);
@@ -480,12 +511,14 @@ namespace PersistentJobsMod
 
 				// try to generate jobs
 				Debug.Log("[PersistentJobs] generating jobs... (coroutine)");
+				List<JobChainController> paxJobChainControllers = null;
 				IEnumerable<JobChainController> shuntingLoadJobChainControllers = null;
 				IEnumerable<JobChainController> transportJobChainControllers = null;
 				IEnumerable<JobChainController> shuntingUnloadJobChainControllers = null;
 				IEnumerable<JobChainController> emptyHaulJobChainControllers = null;
 				try
 				{
+					paxJobChainControllers = JobProceduralGenerationUtilities.TryToGeneratePassengerJobs(paxTcsPerSc);
 					shuntingLoadJobChainControllers
 						= ShuntingLoadJobProceduralGenerator.doJobGeneration(shuntingLoadJobInfos, rng);
 					transportJobChainControllers
@@ -510,7 +543,8 @@ namespace PersistentJobsMod
 				}
 				Debug.Log(
 					$"[PersistentJobs]\n" +
-					$"    generated {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
+					$"    generated {paxJobChainControllers.Where(jcc => jcc != null).Count()} passenger jobs,\n" +
+					$"    {shuntingLoadJobChainControllers.Where(jcc => jcc != null).Count()} shunting load jobs,\n" +
 					$"    {transportJobChainControllers.Where(jcc => jcc != null).Count()} transport jobs,\n" +
 					$"    {shuntingUnloadJobChainControllers.Where(jcc => jcc != null).Count()} shunting unload jobs,\n" +
 					$"    and {emptyHaulJobChainControllers.Where(jcc => jcc != null).Count()} empty haul jobs (coroutine)");
@@ -522,6 +556,18 @@ namespace PersistentJobsMod
 				int totalCarsPreserved = 0;
 				try
 				{
+					foreach (var jcc in paxJobChainControllers)
+                    {
+						if (jcc != null)
+                        {
+							jcc.trainCarsForJobChain.ForEach(tc =>
+							{
+								trainCarCandidatesForDelete.Remove(tc);
+							});
+							totalCarsPreserved += jcc.trainCarsForJobChain.Count;
+							// generation has already taken care of converting player spawned cars and finalizing the job chain
+                        }
+                    }
 					foreach (JobChainController jcc in shuntingLoadJobChainControllers)
 					{
 						if (jcc != null)
