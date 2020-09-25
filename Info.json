@@ -2,7 +2,7 @@
 	"Id": "PersistentJobsMod",
 	"DisplayName": "Persistent Jobs",
 	"Author": "fauxnik",
-	"Version": "2.4.1",
+	"Version": "2.5.0",
 	"AssemblyName": "PersistentJobsMod.dll",
 	"EntryMethod": "PersistentJobsMod.Main.Load",
 	"LoadAfter": [ "PassengerJobs" ],
