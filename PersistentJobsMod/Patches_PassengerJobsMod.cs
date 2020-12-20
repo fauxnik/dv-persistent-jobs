@@ -42,9 +42,20 @@ namespace PersistentJobsMod
 		static void NoOp(List<TrainCar> trainCarsToDelete, bool forceInstantDestroy = false) { }
 		static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
-			return instructions.MethodReplacer(
+			instructions = instructions.MethodReplacer(
 				AccessTools.Method(typeof(CarSpawner), "DeleteTrainCars"),
 				AccessTools.Method(typeof(CarSpawner_DeleteTrainCars_Replacer), "NoOp"));
+
+			foreach(var instruction in instructions)
+            {
+				var operandString = instruction.operand?.ToString();
+				//Debug.Log($"[IL debug] {operandString}");
+				var isCarSpawnerGetInstance = operandString?.Contains("CarSpawner get_Instance()");
+				if (!isCarSpawnerGetInstance.HasValue || isCarSpawnerGetInstance.Value == false)
+                {
+					yield return instruction;
+                }
+            }
         }
     }
 }
