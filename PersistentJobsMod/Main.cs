@@ -133,10 +133,10 @@ namespace PersistentJobsMod
 				var ReplaceDeleteTrainCars = AccessTools.Method(typeof(CarSpawner_DeleteTrainCars_Replacer), "Transpiler");
 				harmony.Patch(LastJobInChainComplete_Commuter, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 				Type paxExpressCtrl = paxMod.Assembly.GetType("PassengerJobsMod.PassengerTransportChainController", true);
-				var LastJobInChainComplete_Express = AccessTools.Method(paxExpressCtrl, "OnLastJobInChainComplete");
+				var LastJobInChainComplete_Express = AccessTools.Method(paxExpressCtrl, "OnLastJobInChainCompleted");
 				harmony.Patch(LastJobInChainComplete_Express, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 				Type paxAbandonPatch = paxMod.Assembly.GetType("PassengerJobsMod.JCC_OnJobAbandoned_Patch");
-				var OnAnyJobFromChainAbandonedPrefix = AccessTools.Method("Prefix");
+				var OnAnyJobFromChainAbandonedPrefix = AccessTools.Method(paxAbandonPatch, "Prefix");
 				harmony.Patch(OnAnyJobFromChainAbandonedPrefix, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 			}
 			catch (Exception e) { Debug.LogError($"Failed to patch PassengerJobsMod!\n{e}"); }
