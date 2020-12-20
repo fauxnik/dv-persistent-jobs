@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using HarmonyLib;
+using Harmony12;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityModManagerNet;
@@ -39,7 +39,7 @@ namespace PersistentJobsMod
 		{
 			Main.modEntry = modEntry;
 
-			var harmony = new Harmony(modEntry.Info.Id);
+			var harmony = HarmonyInstance.Create(modEntry.Info.Id);
 			harmony.PatchAll(Assembly.GetExecutingAssembly());
 
 			paxEntry = UnityModManager.FindMod("PassengerJobs");
@@ -111,7 +111,7 @@ namespace PersistentJobsMod
 			}
 		}
 
-		static void PatchPassengerJobsMod(UnityModManager.ModEntry paxMod, Harmony harmony)
+		static void PatchPassengerJobsMod(UnityModManager.ModEntry paxMod, HarmonyInstance harmony)
         {
 			Debug.Log("Patching PassengerJobsMod...");
 			try

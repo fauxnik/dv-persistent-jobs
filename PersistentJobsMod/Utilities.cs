@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using HarmonyLib;
+using Harmony12;
 using UnityEngine;
 using DV.Logic.Job;
 using DV.ServicePenalty;

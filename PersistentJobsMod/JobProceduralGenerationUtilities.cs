@@ -3,7 +3,7 @@ using System.Linq;
 using System;
 using UnityEngine;
 using DV.Logic.Job;
-using HarmonyLib;
+using Harmony12;
 
 namespace PersistentJobsMod
 {
