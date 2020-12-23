@@ -133,10 +133,10 @@ namespace PersistentJobsMod
 				var ReplaceDeleteTrainCars = AccessTools.Method(typeof(CarSpawner_DeleteTrainCars_Replacer), "Transpiler");
 				harmony.Patch(LastJobInChainComplete_Commuter, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 				Type paxExpressCtrl = paxMod.Assembly.GetType("PassengerJobsMod.PassengerTransportChainController", true);
-				var LastJobInChainComplete_Express = AccessTools.Method(paxExpressCtrl, "OnLastJobInChainComplete");
+				var LastJobInChainComplete_Express = AccessTools.Method(paxExpressCtrl, "OnLastJobInChainCompleted");
 				harmony.Patch(LastJobInChainComplete_Express, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 				Type paxAbandonPatch = paxMod.Assembly.GetType("PassengerJobsMod.JCC_OnJobAbandoned_Patch");
-				var OnAnyJobFromChainAbandonedPrefix = AccessTools.Method("Prefix");
+				var OnAnyJobFromChainAbandonedPrefix = AccessTools.Method(paxAbandonPatch, "Prefix");
 				harmony.Patch(OnAnyJobFromChainAbandonedPrefix, transpiler: new HarmonyMethod(ReplaceDeleteTrainCars));
 			}
 			catch (Exception e) { Debug.LogError($"Failed to patch PassengerJobsMod!\n{e}"); }
@@ -165,8 +165,8 @@ namespace PersistentJobsMod
 
 					JObject saveData = new JObject(
 						new JProperty(SAVE_DATA_VERSION_KEY, new JValue(modEntry.Version.ToString())),
-						new JProperty($"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}", spawnBlockSaveData),
-						new JProperty($"{SAVE_DATA_PASSENGER_BLOCK_KEY}#{CarsSaveManager.TracksHash}", passengerBlockSaveData));
+						new JProperty($"{SAVE_DATA_SPAWN_BLOCK_KEY}#{SingletonBehaviour<CarsSaveManager>.Instance.TracksHash}", spawnBlockSaveData),
+						new JProperty($"{SAVE_DATA_PASSENGER_BLOCK_KEY}#{SingletonBehaviour<CarsSaveManager>.Instance.TracksHash}", passengerBlockSaveData));
 
 					SaveGameManager.data.SetJObject(SAVE_DATA_PRIMARY_KEY, saveData);
 				}
@@ -194,7 +194,7 @@ namespace PersistentJobsMod
 						return;
 					}
 
-					JArray spawnBlockSaveData = (JArray)saveData[$"{SAVE_DATA_SPAWN_BLOCK_KEY}#{CarsSaveManager.TracksHash}"];
+					JArray spawnBlockSaveData = (JArray)saveData[$"{SAVE_DATA_SPAWN_BLOCK_KEY}#{SingletonBehaviour<CarsSaveManager>.Instance.TracksHash}"];
 					if (spawnBlockSaveData == null) { modEntry.Logger.Log("Not loading spawn block list: data is null."); }
 					else
 					{
@@ -202,7 +202,7 @@ namespace PersistentJobsMod
 						modEntry.Logger.Log($"Loaded station spawn block list: [ {string.Join(", ", stationIdSpawnBlockList)} ]");
 					}
 
-					JArray passengerBlockSaveData = (JArray)saveData[$"{SAVE_DATA_PASSENGER_BLOCK_KEY}#{CarsSaveManager.TracksHash}"];
+					JArray passengerBlockSaveData = (JArray)saveData[$"{SAVE_DATA_PASSENGER_BLOCK_KEY}#{SingletonBehaviour<CarsSaveManager>.Instance.TracksHash}"];
 					if (passengerBlockSaveData == null) { modEntry.Logger.Log("Not loading passenger spawn block list: data is null."); }
 					else
                     {
@@ -509,7 +509,7 @@ namespace PersistentJobsMod
 				List<Car> cars = Traverse.Create(task).Field("cars").GetValue<List<Car>>();
 				Car carInRangeOfStation = cars.FirstOrDefault((Car c) =>
 				{
-					TrainCar trainCar = TrainCar.GetTrainCarByCarGuid(c.carGuid);
+					TrainCar trainCar = SingletonBehaviour<IdGenerator>.Instance.logicCarToTrainCar[c];
 					float distance =
 						(trainCar.transform.position - stationRange.stationCenterAnchor.position).sqrMagnitude;
 					return trainCar != null && distance <= initialDistanceRegular;
@@ -882,10 +882,10 @@ namespace PersistentJobsMod
 									List<TrainCar> tcsToDivert = new List<TrainCar>();
 									foreach(Car c in cpt.cars)
 									{
-										tcsToDivert.Add(TrainCar.logicCarToTrainCar[c]);
+										tcsToDivert.Add(SingletonBehaviour<IdGenerator>.Instance.logicCarToTrainCar[c]);
 										tcsToDivert[tcsToDivert.Count - 1].UpdateJobIdOnCarPlates(string.Empty);
 									}
-									JobDebtController.RegisterJoblessCars(tcsToDivert);
+									SingletonBehaviour<JobDebtController>.Instance.RegisterJoblessCars(tcsToDivert);
 									countCarsDiverted += tcsToDivert.Count;
 									unloadJobDef.carsPerDestinationTrack.Remove(cpt);
 								}

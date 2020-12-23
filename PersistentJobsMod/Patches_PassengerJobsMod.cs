@@ -39,7 +39,8 @@ namespace PersistentJobsMod
 
 	static class CarSpawner_DeleteTrainCars_Replacer
     {
-		static void NoOp(List<TrainCar> trainCarsToDelete, bool forceInstantDestroy = false) { }
+		// DeleteTrainCars is no longer static, thus leading instance argument is needed to soak up the instance from the IL stack
+		static void NoOp(CarSpawner instance, List<TrainCar> trainCarsToDelete, bool forceInstantDestroy = false) { }
 		static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
 			return instructions.MethodReplacer(
