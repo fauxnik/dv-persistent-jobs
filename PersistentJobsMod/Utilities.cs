@@ -326,6 +326,25 @@ namespace PersistentJobsMod
 			return list3;
 		}
 
+		public static Track GetTrackThatHasEnoughFreeSpace(YardTracksOrganizer yto, List<Track> tracks, float requiredLength)
+		{
+
+			Debug.Log("[PersistentJobs] getting random track with free space");
+			List<Track> tracksWithFreeSpace = yto.FilterOutTracksWithoutRequiredFreeSpace(tracks, requiredLength);
+			Debug.Log(string.Format(
+				"[PersistentJobs] {0}/{1} tracks have at least {2}m available",
+				tracksWithFreeSpace.Count,
+				tracks.Count,
+				requiredLength));
+			if (tracksWithFreeSpace.Count > 0)
+			{
+				return Utilities.GetRandomFromEnumerable(
+					tracksWithFreeSpace,
+					new System.Random());
+			}
+			return null;
+		}
+
 		private static Dictionary<TrainCarType, List<CargoType>> trainCarTypeToCargoTypes = new Dictionary<TrainCarType, List<CargoType>>();
 	}
 }

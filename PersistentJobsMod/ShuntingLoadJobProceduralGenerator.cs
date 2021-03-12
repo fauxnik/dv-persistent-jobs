@@ -84,7 +84,8 @@ namespace PersistentJobsMod
 					List<TrainCarType> trainCarTypesPerTrack = orderedTrainCarTypes.GetRange(rangeStart, rangeCount);
 					float approxTrainLengthPerTrack = yto.GetTotalCarTypesLength(trainCarTypesPerTrack)
 						+ yto.GetSeparationLengthBetweenCars(trainCarTypesPerTrack.Count);
-					Track track = yto.GetTrackThatHasEnoughFreeSpace(
+					Track track = Utilities.GetTrackThatHasEnoughFreeSpace(
+						yto,
 						startingStation.logicStation.yard.StorageTracks.Except(tracks).ToList(),
 						approxTrainLengthPerTrack / (float)countTracks);
 					if (track == null)
@@ -111,7 +112,8 @@ namespace PersistentJobsMod
 			{
 				destStation = Utilities.GetRandomFromEnumerable(availableDestinations, rng);
 				availableDestinations.Remove(destStation);
-				destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
+				destinationTrack = Utilities.GetTrackThatHasEnoughFreeSpace(
+					yto,
 					yto.FilterOutOccupiedTracks(destStation.logicStation.yard.TransferInTracks),
 					approxTrainLength);
 			}
@@ -211,13 +213,15 @@ namespace PersistentJobsMod
 
 			// choose destination track
 			Debug.Log("[PersistentJobs] load: choosing destination track");
-			Track destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
+			Track destinationTrack = Utilities.GetTrackThatHasEnoughFreeSpace(
+				yto,
 				yto.FilterOutOccupiedTracks(startingStation.logicStation.yard.TransferOutTracks),
 				approxTrainLength
 			);
 			if (destinationTrack == null)
 			{
-				destinationTrack = yto.GetTrackThatHasEnoughFreeSpace(
+				destinationTrack = Utilities.GetTrackThatHasEnoughFreeSpace(
+					yto,
 					startingStation.logicStation.yard.TransferOutTracks,
 					approxTrainLength
 				);

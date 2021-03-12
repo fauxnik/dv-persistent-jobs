@@ -68,7 +68,7 @@ namespace PersistentJobsMod
 			// choose starting track
 			Debug.Log("[PersistentJobs] unload: choosing starting track");
 			Track startingTrack
-				= yto.GetTrackThatHasEnoughFreeSpace(destinationStation.logicStation.yard.TransferInTracks, approxTrainLength);
+				= Utilities.GetTrackThatHasEnoughFreeSpace(yto, destinationStation.logicStation.yard.TransferInTracks, approxTrainLength);
 			if (startingTrack == null)
 			{
 				Debug.LogWarning("[PersistentJobs] unload: Couldn't find startingTrack with enough free space for train!");
@@ -166,7 +166,8 @@ namespace PersistentJobsMod
 				destinationTracks.Clear();
 				for (int i = 0; i < countTracks; i++)
 				{
-					Track track = yto.GetTrackThatHasEnoughFreeSpace(
+					Track track = Utilities.GetTrackThatHasEnoughFreeSpace(
+						yto,
 						destinationStation.logicStation.yard.StorageTracks.Except(destinationTracks).ToList(),
 						approxTrainLength / (float)countTracks);
 					if (track == null)

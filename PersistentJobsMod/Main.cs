@@ -333,7 +333,6 @@ namespace PersistentJobsMod
 		class JobValidator_ProcessJobOverview_Patch
 		{
 			static bool Prefix(
-				List<StationController> ___allStations,
 				DV.Printers.PrinterController ___bookletPrinter,
 				JobOverview jobOverview)
 			{
@@ -345,7 +344,8 @@ namespace PersistentJobsMod
 					}
 
 					Job job = jobOverview.job;
-					StationController stationController = ___allStations.FirstOrDefault(
+					StationController[] allStations = UnityEngine.Object.FindObjectsOfType<StationController>();
+					StationController stationController = allStations.FirstOrDefault(
 						(StationController st) => st.logicStation.availableJobs.Contains(job)
 					);
 
@@ -697,7 +697,7 @@ namespace PersistentJobsMod
 				for (int p = 0; targetTrack == null && p < preferredTracks.Length; p++)
 				{
 					List<Track> trackGroup = preferredTracks[p];
-					targetTrack = yto.GetTrackThatHasEnoughFreeSpace(trackGroup, trainLength);
+					targetTrack = Utilities.GetTrackThatHasEnoughFreeSpace(yto, trackGroup, trainLength);
 				}
 
 				if (targetTrack == null)
@@ -1003,54 +1003,6 @@ namespace PersistentJobsMod
 							e.ToString()));
 					OnCriticalFailure();
 				}
-			}
-		}
-
-		// chooses the shortest track with enough space (instead of the first track found)
-		[HarmonyPatch(typeof(YardTracksOrganizer), "GetTrackThatHasEnoughFreeSpace")]
-		class YardTracksOrganizer_GetTrackThatHasEnoughFreeSpace_Patch
-		{
-			static bool Prefix(YardTracksOrganizer __instance, ref Track __result, List<Track> tracks, float requiredLength)
-			{
-				if (modEntry.Active)
-				{
-					Debug.Log("[PersistentJobs] getting random track with free space");
-					try
-					{
-						__result = null;
-						List<Track> tracksWithFreeSpace = new List<Track>();
-						foreach (Track track in tracks)
-						{
-							double freeSpaceOnTrack = __instance.GetFreeSpaceOnTrack(track);
-							if (freeSpaceOnTrack > (double)requiredLength)
-							{
-								tracksWithFreeSpace.Add(track);
-							}
-						}
-						Debug.Log(string.Format(
-							"[PersistentJobs] {0}/{1} tracks have at least {2}m available",
-							tracksWithFreeSpace.Count,
-							tracks.Count,
-							requiredLength));
-						if (tracksWithFreeSpace.Count > 0)
-						{
-							__result = Utilities.GetRandomFromEnumerable(
-								tracksWithFreeSpace,
-								new System.Random());
-						}
-						return false;
-					}
-					catch (Exception e)
-					{
-						Debug.LogWarning(string.Format(
-							"[PersistentJobs] Exception thrown during {0}.{1} {2} patch:\n{3}\nFalling back on base method.",
-							"YardTracksOrganizer",
-							"GetTrackThatHasEnoughFreeSpace",
-							"prefix",
-							e.ToString()));
-					}
-				}
-				return true;
 			}
 		}
 	}
